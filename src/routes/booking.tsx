@@ -15,7 +15,7 @@ import { must } from "../lib/session";
 import { pageCtx } from "../lib/page";
 import { getBadges, genBookingCode, loadBooking, findBusyInWindow } from "../lib/queries";
 import { STATUS } from "../lib/status";
-import { canApproveFor, canCancelBooking, isDoiXe, isVpDaiLeader } from "../lib/rbac";
+import { canApproveFor, canCancelBooking, canEditBooking, isDoiXe, isVpDaiLeader } from "../lib/rbac";
 import { fromDatetimeLocal, fmtDateTime, toDatetimeLocal } from "../lib/tz";
 import { Layout, StatusPill, Alert, vi } from "../lib/ui";
 
@@ -203,8 +203,12 @@ booking.get("/don/:id", async (c) => {
             {bk.soNguoi ? <tr><th>Số người</th><td>{bk.soNguoi}</td></tr> : null}
           </tbody>
         </table>
-        {(bk.status === STATUS.NHAP || bk.status === STATUS.CHO_BAN_DUYET) && bk.requesterUsername === s.username ? (
-          <p style="margin-top:10px"><a class="btn sec" href={`/don/${bk.id}/sua`}>Sửa đơn</a></p>
+        {canEditBooking(s, bk) ? (
+          <p style="margin-top:10px">
+            <a class="btn sec" href={`/don/${bk.id}/sua`}>
+              {bk.status === STATUS.BAN_TU_CHOI || bk.status === STATUS.DOI_XE_TU_CHOI ? "Sửa & gửi lại" : "Sửa đơn"}
+            </a>
+          </p>
         ) : null}
       </div>
 
@@ -392,12 +396,15 @@ booking.get("/don/:id/sua", async (c) => {
   const { s, db, badges, openTrips } = await pageCtx(c);
   const [bk] = await db.select().from(bookings).where(eq(bookings.id, c.req.param("id"))).limit(1);
   if (!bk || bk.deletedAt) return c.notFound();
-  if (bk.requesterUsername !== s.username || ![STATUS.NHAP, STATUS.CHO_BAN_DUYET].includes(bk.status as never))
-    return c.text("Không sửa được đơn này.", 403);
+  if (!canEditBooking(s, bk)) return c.text("Không sửa được đơn này.", 403);
+  const isResubmit = bk.status === STATUS.BAN_TU_CHOI || bk.status === STATUS.DOI_XE_TU_CHOI;
   return c.html(
     <Layout session={s} badges={badges} openTrips={openTrips} path="" title={`Sửa ${bk.code}`}>
       <div class="card">
         <h2>Sửa {bk.code}</h2>
+        {isResubmit ? (
+          <div class="warn">Đơn đã bị từ chối. Lưu lại sẽ <b>gửi lại</b> đơn để duyệt từ đầu.</div>
+        ) : null}
         <form method="post" action={`/don/${bk.id}/sua`}>
           <div class="row">
             <div><label>Bắt đầu *</label><input type="datetime-local" name="startTime" value={toDatetimeLocal(bk.startTime)} required /></div>
@@ -414,7 +421,7 @@ booking.get("/don/:id/sua", async (c) => {
             <div><label>Quay phim</label><input name="quayPhim" value={bk.quayPhim ?? ""} /></div>
             <div><label>Số người</label><input type="number" min="1" name="soNguoi" value={bk.soNguoi ?? ""} /></div>
           </div>
-          <div style="margin-top:14px"><button>Lưu</button> <a class="btn sec" href={`/don/${bk.id}`}>Hủy</a></div>
+          <div style="margin-top:14px"><button>{isResubmit ? "Lưu & gửi lại" : "Lưu"}</button> <a class="btn sec" href={`/don/${bk.id}`}>Thoát</a></div>
         </form>
       </div>
     </Layout>,
@@ -427,11 +434,17 @@ booking.post("/don/:id/sua", async (c) => {
   const id = c.req.param("id");
   const [bk] = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
   if (!bk || bk.deletedAt) return c.notFound();
-  if (bk.requesterUsername !== s.username || ![STATUS.NHAP, STATUS.CHO_BAN_DUYET].includes(bk.status as never))
-    return c.text("Không sửa được đơn này.", 403);
+  if (!canEditBooking(s, bk)) return c.text("Không sửa được đơn này.", 403);
   const f = await c.req.formData();
   const startTime = fromDatetimeLocal(String(f.get("startTime")));
   const endRaw = String(f.get("endTime") ?? "");
+
+  // Đơn bị từ chối: sửa xong = gửi lại. Ban từ chối -> chờ Ban duyệt lại (xoá lượt
+  // duyệt cũ); Đội xe từ chối -> quay lại hàng chờ Đội xe (giữ lượt Ban đã duyệt).
+  let resetStatus: string | undefined;
+  if (bk.status === STATUS.BAN_TU_CHOI) resetStatus = STATUS.CHO_BAN_DUYET;
+  else if (bk.status === STATUS.DOI_XE_TU_CHOI) resetStatus = STATUS.CHO_DOI_XE;
+
   await db
     .update(bookings)
     .set({
@@ -443,10 +456,18 @@ booking.post("/don/:id/sua", async (c) => {
       bienTap: str(f.get("bienTap")),
       quayPhim: str(f.get("quayPhim")),
       soNguoi: intOrNull(f.get("soNguoi")),
+      ...(resetStatus ? { status: resetStatus } : {}),
       updatedAt: new Date(),
       updatedBy: s.username,
     })
     .where(eq(bookings.id, id));
+
+  if (bk.status === STATUS.BAN_TU_CHOI) {
+    await db
+      .update(bookingApprovals)
+      .set({ deletedAt: new Date(), updatedBy: s.username })
+      .where(eq(bookingApprovals.bookingId, id));
+  }
   return c.redirect(`/don/${id}`);
 });
 

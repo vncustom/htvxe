@@ -20,6 +20,15 @@ const attnReason = (status: string) =>
     ? "Đã bố trí xe — xem xe & lái xe"
     : "Bị từ chối — sửa lại rồi gửi, hoặc hủy";
 
+const PAGE_SIZE = 25;
+type FilterKey = "mo" | "xong" | "huy" | "all";
+const FILTERS: { key: FilterKey; label: string; test: (st: string) => boolean }[] = [
+  { key: "mo", label: "Đang mở", test: (st) => st !== STATUS.HOAN_THANH && st !== STATUS.HUY },
+  { key: "xong", label: "Hoàn thành", test: (st) => st === STATUS.HOAN_THANH },
+  { key: "huy", label: "Đã hủy", test: (st) => st === STATUS.HUY },
+  { key: "all", label: "Tất cả", test: () => true },
+];
+
 misc.get("/cua-toi", async (c) => {
   const { s, db, badges, openTrips } = await pageCtx(c);
   const rows = await db
@@ -27,15 +36,25 @@ misc.get("/cua-toi", async (c) => {
     .from(bookings)
     .where(and(isNull(bookings.deletedAt), eq(bookings.requesterUsername, s.username)))
     .orderBy(desc(bookings.startTime))
-    .limit(200);
+    .limit(1000);
 
   const attn = rows.filter((r) => ATTN.includes(r.status));
-  const rest = rows.filter((r) => !ATTN.includes(r.status));
-  const ordered = [...attn, ...rest];
+
+  const loc = (c.req.query("loc") as FilterKey) || "mo";
+  const f = FILTERS.find((x) => x.key === loc) ?? FILTERS[0];
+  const filtered = rows
+    .filter((r) => f.test(r.status))
+    .sort((a, b) => (ATTN.includes(a.status) ? 0 : 1) - (ATTN.includes(b.status) ? 0 : 1));
+
+  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const page = Math.min(totalPages, Math.max(1, Number(c.req.query("trang")) || 1));
+  const pageRows = filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
+  const q = (extra: Record<string, string | number>) =>
+    "/cua-toi?" + new URLSearchParams({ loc: f.key, ...Object.fromEntries(Object.entries(extra).map(([k, v]) => [k, String(v)])) }).toString();
 
   return c.html(
     <Layout session={s} badges={badges} openTrips={openTrips} path="/cua-toi" title="Đơn của tôi">
-      <h2>Đơn của tôi ({rows.length})</h2>
+      <h2>Đơn của tôi</h2>
 
       {attn.length > 0 ? (
         <div class="warn">
@@ -51,11 +70,25 @@ misc.get("/cua-toi", async (c) => {
         </div>
       ) : null}
 
+      <div class="weeknav no-print">
+        {FILTERS.map((x) => {
+          const n = rows.filter((r) => x.test(r.status)).length;
+          return (
+            <a class={`btn ${x.key === f.key ? "" : "sec"}`} href={`/cua-toi?loc=${x.key}`}>
+              {x.label} ({n})
+            </a>
+          );
+        })}
+      </div>
+
       <div class="tablewrap">
         <table>
           <thead><tr><th>Mã</th><th>Thời gian</th><th>Đến</th><th>Trạng thái</th><th></th></tr></thead>
           <tbody>
-            {ordered.map((r) => {
+            {pageRows.length === 0 ? (
+              <tr><td colspan={5} class="muted">Không có đơn.</td></tr>
+            ) : null}
+            {pageRows.map((r) => {
               const need = ATTN.includes(r.status);
               return (
                 <tr style={need ? "background:#fffbeb" : ""}>
@@ -73,6 +106,14 @@ misc.get("/cua-toi", async (c) => {
           </tbody>
         </table>
       </div>
+
+      {totalPages > 1 ? (
+        <div class="weeknav no-print" style="margin-top:12px">
+          {page > 1 ? <a class="btn sec" href={q({ trang: page - 1 })}>← Trước</a> : null}
+          <span class="muted">Trang {page}/{totalPages} · {filtered.length} đơn</span>
+          {page < totalPages ? <a class="btn sec" href={q({ trang: page + 1 })}>Sau →</a> : null}
+        </div>
+      ) : null}
     </Layout>,
   );
 });

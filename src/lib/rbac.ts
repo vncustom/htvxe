@@ -32,7 +32,14 @@ export function canCancelBooking(
 ): boolean {
   const owner = bk.requesterUsername === s.username;
   if ((bk.status === "cho_ban_duyet" || bk.status === "nhap") && owner) return true;
+  // Chủ đơn dọn đơn đã bị từ chối (kết thúc vòng đời).
+  if ((bk.status === "ban_tu_choi" || bk.status === "doi_xe_tu_choi") && owner) return true;
   if (bk.status === "cho_doi_xe" && (isDoiXe(s) || isVpDaiLeader(s))) return true;
   if (bk.status === "da_dieu_xe" && isVpDaiLeader(s)) return true;
   return false;
 }
+
+/** Chủ đơn được sửa: đơn nháp, đang chờ Ban, hoặc vừa bị từ chối (để gửi lại). */
+export const EDITABLE_BY_OWNER = ["nhap", "cho_ban_duyet", "ban_tu_choi", "doi_xe_tu_choi"];
+export const canEditBooking = (s: Session, bk: { status: string; requesterUsername: string }) =>
+  bk.requesterUsername === s.username && EDITABLE_BY_OWNER.includes(bk.status);
