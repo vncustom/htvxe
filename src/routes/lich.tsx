@@ -3,7 +3,7 @@ import { and, gte, isNull, lt, inArray } from "drizzle-orm";
 import type { Env } from "../env";
 import { bookings } from "../db/schema";
 import { pageCtx } from "../lib/page";
-import { ACTIVE_STATUSES, statusColor } from "../lib/status";
+import { ACTIVE_STATUSES, statusColor, statusLabel } from "../lib/status";
 import { Layout } from "../lib/ui";
 import { addDaysKey, fmtTime, instantFromVN, mondayKeyOf, todayKey, vnDateKey, weekdayLabel } from "../lib/tz";
 
@@ -61,6 +61,12 @@ lich.get("/lich", async (c) => {
           <input type="date" name="tuan" value={anchor} onchange="this.form.submit()" />
           <button class="sec">Xem tuần</button>
         </form>
+      </div>
+      <div class="legend no-print">
+        <span class="muted">Màu theo trạng thái đơn:</span>
+        {ACTIVE_STATUSES.map((st) => (
+          <span><i style={`background:${statusColor(st)}`}></i>{statusLabel(st)}</span>
+        ))}
       </div>
       <div class="grid7">
         {days.map((d, i) => (

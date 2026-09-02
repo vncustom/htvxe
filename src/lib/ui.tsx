@@ -68,6 +68,11 @@ button.ok,.btn.ok{background:#16a34a}button.ok:hover,.btn.ok:hover{background:#1
 .weeknav{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-bottom:14px}
 .weeknav form{display:flex;gap:8px;align-items:center;margin-left:auto}
 .weeknav input[type=date]{width:auto}
+.legend{display:flex;flex-wrap:wrap;gap:6px 16px;align-items:center;margin-bottom:14px;font-size:12.5px}
+.legend i{width:12px;height:12px;border-radius:3px;display:inline-block;margin-right:5px;vertical-align:-1px}
+.top .bell{position:relative;font-size:18px;line-height:1;color:inherit}
+.top .bell:hover{text-decoration:none;filter:brightness(1.15)}
+.top .bell .badge{position:absolute;top:-7px;right:-9px;margin:0;min-width:16px;line-height:16px;font-size:10px;padding:0 4px}
 .grid7{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
 .day{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px;min-height:132px;box-shadow:var(--shadow)}
 .day.today{border-color:var(--brand);box-shadow:0 0 0 2px rgba(37,99,235,.25),var(--shadow)}
@@ -110,6 +115,7 @@ export const Layout: FC<
     openTrips?: OpenTrip[];
   }>
 > = ({ session: s, badges: b, path, title, openTrips, children }) => {
+  const notif = b.duyet + b.dieuXe + b.chuyenLaiXe + (openTrips?.length ?? 0) + b.donCuaToi;
   const nav: NavItem[] = [
     { href: "/lich", label: "Lịch tuần", show: true },
     { href: "/cua-toi", label: "Đơn của tôi", show: true, badge: b.donCuaToi },
@@ -157,6 +163,9 @@ export const Layout: FC<
           <div class="main">
             <header class="top no-print">
               <div class="who">
+                <a class="bell" href="/thong-bao" title="Thông báo" aria-label="Thông báo">
+                  🔔{notif > 0 ? <span class="badge">{notif > 99 ? "99+" : notif}</span> : null}
+                </a>
                 <span class="avatar">{initials(s.fullName)}</span>
                 <span>
                   <b>{s.fullName}</b> · {roleLabel(s.role)}
