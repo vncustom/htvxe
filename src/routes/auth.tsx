@@ -18,6 +18,9 @@ const LoginPage = (props: { err?: string }) => (
     </head>
     <body>
       <div style="max-width:360px;margin:10vh auto;padding:0 16px">
+        <div style="text-align:center;margin-bottom:14px">
+          <img src="/logo.png" alt="Logo Đài" style="height:64px;width:auto" />
+        </div>
         <h2 style="text-align:center">Đặt xe Công tác HTV</h2>
         <form method="post" action="/login" class="card">
           {props.err ? <div class="err">{props.err}</div> : null}

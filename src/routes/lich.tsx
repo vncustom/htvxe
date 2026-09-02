@@ -40,31 +40,43 @@ lich.get("/lich", async (c) => {
   for (const r of rows) (byDay[vnDateKey(r.startTime)] ??= []).push(r);
 
   const days = Array.from({ length: 7 }, (_, i) => addDaysKey(monday, i));
+  const today = todayKey();
+  const sunday = addDaysKey(monday, 6);
+  const ddmm = (k: string) => {
+    const [, mm, dd] = k.split("-");
+    return `${dd}/${mm}`;
+  };
 
   return c.html(
     <Layout session={s} badges={badges} openTrips={openTrips} path="/lich" title="Lịch tuần">
-      <h2>Lịch tuần</h2>
-      <p class="no-print">
-        <a class="btn sec" href={`/lich?tuan=${addDaysKey(monday, -7)}`}>← Tuần trước</a>{" "}
-        <a class="btn sec" href={`/lich?tuan=${todayKey()}`}>Tuần này</a>{" "}
+      <div class="pagehead">
+        <h2>Lịch tuần {ddmm(monday)} – {ddmm(sunday)}</h2>
+      </div>
+      <div class="weeknav no-print">
+        <a class="btn sec" href={`/lich?tuan=${addDaysKey(monday, -7)}`}>← Tuần trước</a>
+        <a class="btn sec" href={`/lich?tuan=${todayKey()}`}>Tuần này</a>
         <a class="btn sec" href={`/lich?tuan=${nextMonday}`}>Tuần sau →</a>
-      </p>
+        <form method="get" action="/lich">
+          <label style="margin:0;font-weight:600">Chọn ngày</label>
+          <input type="date" name="tuan" value={anchor} onchange="this.form.submit()" />
+          <button class="sec">Xem tuần</button>
+        </form>
+      </div>
       <div class="grid7">
-        {days.map((d, i) => {
-          const [, m, dd] = d.split("-");
-          return (
-            <div class="day">
-              <div class="dh">
-                {weekdayLabel((i + 1) % 7)} {dd}/{m}
-              </div>
-              {(byDay[d] ?? []).map((e) => (
-                <a class="ev" href={`/don/${e.id}`} style={`background:${statusColor(e.status)}`}>
-                  {fmtTime(e.startTime)} {e.diemDen}
-                </a>
-              ))}
+        {days.map((d, i) => (
+          <div class={d === today ? "day today" : "day"}>
+            <div class="dh">
+              <span>{weekdayLabel((i + 1) % 7)} {ddmm(d)}</span>
+              {d === today ? <span>Hôm nay</span> : null}
             </div>
-          );
-        })}
+            {(byDay[d] ?? []).map((e) => (
+              <a class="ev" href={`/don/${e.id}`} style={`background:${statusColor(e.status)}`}>
+                {fmtTime(e.startTime)} {e.diemDen}
+              </a>
+            ))}
+            {(byDay[d] ?? []).length === 0 ? <span class="muted" style="font-size:11px">—</span> : null}
+          </div>
+        ))}
       </div>
     </Layout>,
   );

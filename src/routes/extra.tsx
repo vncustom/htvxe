@@ -8,7 +8,7 @@ import { must } from "../lib/session";
 import { isAdmin, isDoiXe, isLanhDaoDai, roleLabel } from "../lib/rbac";
 import { findOdoGaps, type OdoTripRow } from "../lib/odometer";
 import { Layout, vi } from "../lib/ui";
-import { fmtDateTime, instantFromVN, todayKey, vnParts } from "../lib/tz";
+import { fmtDateTime, instantFromVN, vnParts } from "../lib/tz";
 
 export const extra = new Hono<Env>();
 
@@ -116,27 +116,32 @@ extra.get("/cong-to-met", async (c) => {
         </table>
       )}
 
-      <h3>Đặt lại số km gốc của xe</h3>
-      <div class="card">
-        <form method="post" action="/cong-to-met/set-odo" class="row">
-          <div>
-            <label>Xe</label>
-            <select name="vehicleId" required>{vehs.map((v) => <option value={v.id}>{v.name} ({v.plateNo})</option>)}</select>
+      {isAdmin(s) ? (
+        <>
+          <h3>Đặt lại số km gốc của xe</h3>
+          <div class="card">
+            <p class="muted" style="margin-top:0">Chỉ quản trị được đặt lại số gốc. Đội xe điều chỉnh km qua từng chuyến đã đóng.</p>
+            <form method="post" action="/cong-to-met/set-odo" class="row">
+              <div>
+                <label>Xe</label>
+                <select name="vehicleId" required>{vehs.map((v) => <option value={v.id}>{v.name} ({v.plateNo})</option>)}</select>
+              </div>
+              <div>
+                <label>Số km</label>
+                <input name="odoValue" inputmode="numeric" required />
+              </div>
+              <div style="display:flex;align-items:flex-end"><button>Lưu</button></div>
+            </form>
           </div>
-          <div>
-            <label>Số km</label>
-            <input name="odoValue" inputmode="numeric" required />
-          </div>
-          <div style="display:flex;align-items:flex-end"><button>Lưu</button></div>
-        </form>
-      </div>
+        </>
+      ) : null}
     </Layout>,
   );
 });
 
 extra.post("/cong-to-met/set-odo", async (c) => {
   const s = must(c);
-  if (!isDoiXe(s)) return c.text("Chỉ Đội xe.", 403);
+  if (!isAdmin(s)) return c.text("Chỉ quản trị được đặt lại số km gốc.", 403);
   const db = c.get("db");
   const f = await c.req.formData();
   const vehicleId = String(f.get("vehicleId") ?? "");
@@ -230,9 +235,12 @@ extra.get("/cong-to-met/xe/:id", async (c) => {
 
 /* ================= Thống kê ================= */
 
+/** Mặc định = trọn tháng hiện tại (ngày 1 -> ngày cuối tháng), giờ VN. */
 function monthRange(): { tu: string; den: string } {
   const p = vnParts(new Date());
-  return { tu: `${p.year}-${String(p.month).padStart(2, "0")}-01`, den: todayKey() };
+  const mm = String(p.month).padStart(2, "0");
+  const lastDay = new Date(p.year, p.month, 0).getDate();
+  return { tu: `${p.year}-${mm}-01`, den: `${p.year}-${mm}-${String(lastDay).padStart(2, "0")}` };
 }
 
 async function statRows(db: DB, from: Date, to: Date) {
@@ -320,10 +328,19 @@ extra.get("/thong-ke", async (c) => {
   );
 });
 
+/** Lối tắt cho lái xe: xem thống kê của chính mình. */
+extra.get("/thong-ke/toi", (c) => {
+  const s = must(c);
+  if (!s.isDriver) return c.text("Trang dành cho lái xe.", 403);
+  return c.redirect(`/thong-ke/lai-xe/${encodeURIComponent(s.username)}`);
+});
+
 extra.get("/thong-ke/lai-xe/:username", async (c) => {
   const { s, db, badges, openTrips } = await pageCtx(c);
-  if (!isDoiXe(s) && !isAdmin(s) && !isLanhDaoDai(s)) return c.text("Không có quyền.", 403);
   const username = c.req.param("username");
+  const priv = isDoiXe(s) || isAdmin(s) || isLanhDaoDai(s);
+  const self = s.isDriver && s.username === username;
+  if (!priv && !self) return c.text("Không có quyền.", 403);
   const [driver] = await db.select().from(users).where(eq(users.username, username)).limit(1);
   if (!driver) return c.notFound();
   const def = monthRange();
@@ -364,27 +381,53 @@ extra.get("/thong-ke/lai-xe/:username", async (c) => {
     0,
   );
 
+  const phatSinh = rows.filter((r) => r.isPhatSinh).length;
+
   return c.html(
-    <Layout session={s} badges={badges} openTrips={openTrips} path="/thong-ke" title={`Thống kê ${driver.fullName}`}>
-      <h2>{driver.fullName} ({driver.username})</h2>
-      <p><a href={`/thong-ke?tu=${tu}&den=${den}`}>← Thống kê chung</a></p>
-      <p>{tu} → {den}: <b>{rows.length}</b> chuyến · <b>{vi(totalKm)}</b> km · <b>{totalHours.toFixed(1)}</b> giờ chạy</p>
-      <table>
-        <thead><tr><th>Chuyến</th><th>Đến</th><th>Xe</th><th>Xuất bến</th><th>Về</th><th>Km</th><th></th></tr></thead>
-        <tbody>
-          {rows.map((r) => (
-            <tr>
-              <td>{r.code}{r.isPhatSinh ? " (PS)" : ""}</td>
-              <td>{r.diemDen}</td>
-              <td>{r.vehicleName} ({r.plateNo})</td>
-              <td>{fmtDateTime(r.gioXuatBen)}</td>
-              <td>{fmtDateTime(r.gioKetThuc)}</td>
-              <td>{vi(r.soKm)}</td>
-              <td>{vi(r.odoStart)} → {vi(r.odoEnd)}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
+    <Layout session={s} badges={badges} openTrips={openTrips} path={self && !priv ? "/thong-ke/toi" : "/thong-ke"} title={`Thống kê ${driver.fullName}`}>
+      <div class="pagehead">
+        <h2>{self && !priv ? "Thống kê của tôi" : `${driver.fullName} (${driver.username})`}</h2>
+        {priv ? <a class="btn sec" href={`/thong-ke?tu=${tu}&den=${den}`}>← Thống kê chung</a> : null}
+      </div>
+
+      <form class="weeknav no-print" method="get" action={`/thong-ke/lai-xe/${encodeURIComponent(username)}`}>
+        <div><label style="margin:0">Từ ngày</label><input type="date" name="tu" value={tu} /></div>
+        <div><label style="margin:0">Đến ngày</label><input type="date" name="den" value={den} /></div>
+        <button>Xem</button>
+      </form>
+
+      <div class="card">
+        <p style="margin:0">
+          <b>{tu}</b> → <b>{den}</b>
+        </p>
+        <p style="margin:8px 0 0;font-size:16px">
+          <b>{rows.length}</b> chuyến{phatSinh ? ` (${phatSinh} phát sinh)` : ""} ·{" "}
+          <b>{vi(totalKm)}</b> km · <b>{totalHours.toFixed(1)}</b> giờ chạy
+        </p>
+      </div>
+
+      {rows.length === 0 ? (
+        <p class="muted">Chưa có chuyến nào đã đóng trong khoảng này.</p>
+      ) : (
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Chuyến</th><th>Đến</th><th>Xe</th><th>Xuất bến</th><th>Về</th><th>Km</th><th>Công-tơ-mét</th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr>
+                  <td>{r.code}{r.isPhatSinh ? " (PS)" : ""}</td>
+                  <td>{r.diemDen}</td>
+                  <td>{r.vehicleName} ({r.plateNo})</td>
+                  <td>{fmtDateTime(r.gioXuatBen)}</td>
+                  <td>{fmtDateTime(r.gioKetThuc)}</td>
+                  <td>{vi(r.soKm)}</td>
+                  <td>{vi(r.odoStart)} → {vi(r.odoEnd)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </Layout>,
   );
 });

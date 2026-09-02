@@ -1,7 +1,8 @@
 import { Hono } from "hono";
 import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { Env } from "../env";
-import { bookingDispatch, bookings, odometerEvents, tripLogs, vehicles } from "../db/schema";
+import { bookingDispatch, bookings, odometerEvents, tripLogs, users, vehicles } from "../db/schema";
 import { must } from "../lib/session";
 import { pageCtx } from "../lib/page";
 import { isDoiXe } from "../lib/rbac";
@@ -27,6 +28,8 @@ trips.get("/chuyen-cua-toi", async (c) => {
   const msg = c.req.query("ok");
   const warn = c.req.query("warn");
 
+  const driverU = alias(users, "driver_u");
+
   const rows = await db
     .select({
       id: bookings.id,
@@ -37,15 +40,20 @@ trips.get("/chuyen-cua-toi", async (c) => {
       diemXuatPhat: bookings.diemXuatPhat,
       diemDen: bookings.diemDen,
       noiDung: bookings.noiDung,
+      bienTap: bookings.bienTap,
+      quayPhim: bookings.quayPhim,
       vehicleName: vehicles.name,
       plateNo: vehicles.plateNo,
       currentOdometer: vehicles.currentOdometer,
       odoStart: tripLogs.odoStart,
       gioXuatBen: tripLogs.gioXuatBen,
+      driverName: driverU.fullName,
+      driverPhone: driverU.phone,
     })
     .from(bookings)
     .innerJoin(bookingDispatch, eq(bookingDispatch.bookingId, bookings.id))
     .innerJoin(vehicles, eq(vehicles.id, bookingDispatch.vehicleId))
+    .innerJoin(driverU, eq(driverU.username, bookingDispatch.driverUsername))
     .leftJoin(tripLogs, eq(tripLogs.bookingId, bookings.id))
     .where(
       and(
@@ -56,6 +64,17 @@ trips.get("/chuyen-cua-toi", async (c) => {
       ),
     )
     .orderBy(asc(bookings.startTime));
+
+  // SĐT biên tập (nếu tên biên tập khớp họ tên một user) — tra 1 lượt.
+  const bienTapNames = [...new Set(rows.map((r) => r.bienTap).filter((x): x is string => !!x))];
+  const phoneByName = new Map<string, string>();
+  if (bienTapNames.length) {
+    const eds = await db
+      .select({ fullName: users.fullName, phone: users.phone })
+      .from(users)
+      .where(and(inArray(users.fullName, bienTapNames), isNull(users.deletedAt)));
+    for (const e of eds) if (e.phone && !phoneByName.has(e.fullName)) phoneByName.set(e.fullName, e.phone);
+  }
 
   return c.html(
     <Layout session={s} badges={badges} openTrips={openTrips} path="/chuyen-cua-toi" title="Chuyến của tôi">
@@ -68,11 +87,16 @@ trips.get("/chuyen-cua-toi", async (c) => {
           <h3>
             {r.code} <StatusPill status={r.status} />
           </h3>
-          <p>
-            {r.diemXuatPhat} → {r.diemDen} · {fmtDateTime(r.startTime)}
-            <br />
-            Xe: <b>{r.vehicleName}</b> ({r.plateNo}) · Nội dung: {r.noiDung}
-          </p>
+          <table style="margin:8px 0">
+            <tbody>
+              <tr><th style="width:130px">Hành trình</th><td>{r.diemXuatPhat} → {r.diemDen} · {fmtDateTime(r.startTime)}</td></tr>
+              <tr><th>Xe</th><td><b>{r.vehicleName}</b> ({r.plateNo})</td></tr>
+              <tr><th>Lái xe</th><td>{r.driverName}{r.driverPhone ? ` · ☎ ${r.driverPhone}` : ""}</td></tr>
+              <tr><th>Biên tập</th><td>{r.bienTap ? `${r.bienTap}${phoneByName.get(r.bienTap) ? ` · ☎ ${phoneByName.get(r.bienTap)}` : ""}` : "—"}</td></tr>
+              {r.quayPhim ? <tr><th>Quay phim</th><td>{r.quayPhim}</td></tr> : null}
+              <tr><th>Nội dung</th><td>{r.noiDung}</td></tr>
+            </tbody>
+          </table>
 
           {r.status === STATUS.DA_DIEU_XE ? (
             <form method="post" action={`/chuyen/${r.id}/bat-dau`}>
