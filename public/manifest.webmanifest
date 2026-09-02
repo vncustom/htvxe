@@ -1,0 +1,9 @@
+{
+  "name": "Đặt xe Công tác HTV",
+  "short_name": "Đặt xe HTV",
+  "start_url": "/lich",
+  "display": "standalone",
+  "background_color": "#f1f5f9",
+  "theme_color": "#2563eb",
+  "icons": [{ "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }]
+}

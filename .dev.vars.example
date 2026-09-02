@@ -1,0 +1,4 @@
+# Đổi tên thành `.dev.vars` để `wrangler dev` nạp.
+DATABASE_URL="postgresql://postgres.xxxx:PASS@aws-1-ap-southeast-1.pooler.supabase.com:6543/postgres"
+AUTH_SECRET="chuoi-ngau-nhien-dai-doi-di"
+APP_TZ="Asia/Ho_Chi_Minh"
