@@ -3,6 +3,8 @@ export type Bindings = {
   AUTH_SECRET: string;
   APP_TZ?: string;
   ASSETS: Fetcher;
+  HTV_SSO_SERVER_URL?: string;
+  HTV_SSO_SECRET?: string;
 };
 
 export type Session = {
