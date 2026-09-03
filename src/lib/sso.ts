@@ -18,65 +18,156 @@ function base64UrlDecodeText(str: string): string {
 }
 
 /**
- * Xác thực token JWT (HS256) từ HTV SSO Dashboard bằng WebCrypto chuẩn.
- * Có leeway 300 giây (5 phút) để bù sai lệch đồng hồ giữa server nội bộ HTV và Cloudflare.
+ * Tạo danh sách các biến thể của secret key (xử lý trường hợp người dùng copy thừa dấu ngoặc kép, khoảng trắng, xuống dòng)
+ */
+function getSecretCandidates(rawSecret: string): string[] {
+  const list = new Set<string>();
+  if (!rawSecret) return [];
+
+  list.add(rawSecret);
+  list.add(rawSecret.trim());
+  list.add(rawSecret.trim().replace(/^["']|["']$/g, ""));
+  list.add(rawSecret.trim().replace(/^["']|["']$/g, "").trim());
+  list.add(rawSecret.replace(/[\r\n\t]/g, ""));
+  list.add(rawSecret.replace(/[\r\n\t]/g, "").trim().replace(/^["']|["']$/g, ""));
+
+  return Array.from(list).filter(Boolean);
+}
+
+export type SsoVerifyResult = {
+  valid: boolean;
+  payload?: any;
+  username?: string;
+  error?: string;
+  diagnostic?: {
+    headerAlg?: string;
+    decodedUsername?: string;
+    secretLen?: number;
+    secretPreview?: string;
+    hasQuotes?: boolean;
+    hasWhitespace?: boolean;
+  };
+};
+
+/**
+ * Xác thực token JWT từ HTV SSO Dashboard bằng WebCrypto chuẩn.
+ * Có leeway 300 giây (5 phút) để bù sai lệch đồng hồ.
+ * Hỗ trợ tự động chuẩn hoá secret key và cung cấp chi tiết chẩn đoán nếu sai secret.
  */
 export async function verifySsoJwt(
-  token: string,
-  secret: string,
+  rawToken: string,
+  rawSecret: string,
   leewaySeconds = 300,
-): Promise<{ valid: boolean; payload?: any; error?: string }> {
-  if (!token || !secret) {
-    return { valid: false, error: "Thiếu token hoặc HTV_SSO_SECRET." };
+): Promise<SsoVerifyResult> {
+  if (!rawToken) {
+    return { valid: false, error: "Không nhận được token từ HTV SSO." };
+  }
+  if (!rawSecret) {
+    return { valid: false, error: "Biến môi trường HTV_SSO_SECRET chưa được cấu hình trên Cloudflare Workers." };
   }
 
-  const parts = token.trim().split(".");
+  // Làm sạch token (loại bỏ khoảng trắng, dấu nháy thừa, giải mã URL nếu bị mã hoá)
+  let token = rawToken.trim().replace(/^["']|["']$/g, "");
+  if (token.includes("%")) {
+    try {
+      token = decodeURIComponent(token);
+    } catch {
+      // bỏ qua nếu không giải mã được
+    }
+  }
+
+  const parts = token.split(".");
   if (parts.length !== 3) {
-    return { valid: false, error: "Định dạng token không hợp lệ (không đúng định dạng JWT)." };
+    return { valid: false, error: "Định dạng token không hợp lệ (không đủ 3 phần của JWT)." };
   }
 
   const [headerB64, payloadB64, signatureB64] = parts;
 
-  // 1. Kiểm tra chữ ký HMAC-SHA256
+  // 1. Luôn giải mã header và payload trước để phục vụ chẩn đoán
+  let header: any = {};
+  let payload: any = {};
   try {
-    const encoder = new TextEncoder();
-    const key = await crypto.subtle.importKey(
-      "raw",
-      encoder.encode(secret),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["verify"],
-    );
-
-    const data = encoder.encode(`${headerB64}.${payloadB64}`);
-    const signature = base64UrlDecode(signatureB64);
-
-    const isValidSig = await crypto.subtle.verify("HMAC", key, signature, data);
-    if (!isValidSig) {
-      return { valid: false, error: "Chữ ký token không hợp lệ (sai HTV_SSO_SECRET hoặc token đã bị sửa đổi)." };
-    }
-  } catch (err: any) {
-    return { valid: false, error: "Lỗi kiểm tra chữ ký token: " + (err?.message || String(err)) };
+    header = JSON.parse(base64UrlDecodeText(headerB64));
+  } catch {
+    header = { alg: "HS256" };
   }
 
-  // 2. Parse nội dung JSON payload
-  let payload: any;
   try {
-    const payloadJson = base64UrlDecodeText(payloadB64);
-    payload = JSON.parse(payloadJson);
+    payload = JSON.parse(base64UrlDecodeText(payloadB64));
   } catch {
     return { valid: false, error: "Không thể giải mã dữ liệu payload trong token." };
+  }
+
+  const decodedUsername = extractSsoUsername(payload);
+  const alg = header?.alg || "HS256";
+  const hashName = alg === "HS512" ? "SHA-512" : alg === "HS384" ? "SHA-384" : "SHA-256";
+
+  // Chuẩn bị dữ liệu và chữ ký
+  const encoder = new TextEncoder();
+  const data = encoder.encode(`${headerB64}.${payloadB64}`);
+  let signatureBytes: Uint8Array;
+  try {
+    signatureBytes = base64UrlDecode(signatureB64);
+  } catch (err: any) {
+    return { valid: false, error: "Chữ ký trong token không đúng định dạng Base64Url: " + err.message };
+  }
+
+  // 2. Thử xác thực với từng ứng viên secret (đã lọc ngoặc kép, khoảng trắng...)
+  const candidates = getSecretCandidates(rawSecret);
+  let verified = false;
+
+  for (const cand of candidates) {
+    try {
+      const key = await crypto.subtle.importKey(
+        "raw",
+        encoder.encode(cand),
+        { name: "HMAC", hash: hashName },
+        false,
+        ["verify"],
+      );
+      const ok = await crypto.subtle.verify("HMAC", key, signatureBytes, data);
+      if (ok) {
+        verified = true;
+        break;
+      }
+    } catch {
+      // tiếp tục thử candidate khác
+    }
+  }
+
+  if (!verified) {
+    const hasQuotes = /^["'].*["']$/.test(rawSecret.trim());
+    const hasWhitespace = /\s/.test(rawSecret);
+    const secretPreview = rawSecret.length > 6
+      ? `${rawSecret.slice(0, 3)}...${rawSecret.slice(-3)}`
+      : "(quá ngắn)";
+
+    return {
+      valid: false,
+      error: `Chữ ký token không khớp với HTV_SSO_SECRET trên Cloudflare Worker.`,
+      diagnostic: {
+        headerAlg: alg,
+        decodedUsername: decodedUsername || "(không rõ)",
+        secretLen: rawSecret.length,
+        secretPreview,
+        hasQuotes,
+        hasWhitespace,
+      },
+    };
   }
 
   // 3. Kiểm tra hạn sử dụng (exp) kèm bù sai lệch giờ (leeway)
   const now = Math.floor(Date.now() / 1000);
   if (payload && typeof payload.exp === "number") {
     if (now > payload.exp + leewaySeconds) {
-      return { valid: false, error: "Token SSO đã hết hạn." };
+      return {
+        valid: false,
+        error: `Token SSO đã hết hạn (Thời gian token: ${new Date(payload.exp * 1000).toLocaleTimeString()}, hiện tại: ${new Date(now * 1000).toLocaleTimeString()}).`,
+      };
     }
   }
 
-  return { valid: true, payload };
+  return { valid: true, payload, username: decodedUsername };
 }
 
 /**
