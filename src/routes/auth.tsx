@@ -354,7 +354,7 @@ const LoginPage = (props: LoginPageProps) => {
           </div>
 
           <p class="muted" style="text-align:center;margin-top:16px;font-size:13px">
-            Mật khẩu nội bộ mặc định: 123456
+            Mật khẩu nội bộ
           </p>
         </div>
       </body>
