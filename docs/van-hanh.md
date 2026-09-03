@@ -45,6 +45,12 @@ push lại. Dữ liệu ở Supabase không bị ảnh hưởng bởi việc dep
 - **Vô hiệu hoá**: bỏ tick **Đang hoạt động** → user không đăng nhập được.
   Hệ thống **không xoá cứng** để giữ lịch sử đơn.
 
+> **Lưu ý về HTV SSO**:
+> - Đảm bảo `username` trong bảng `users` khớp đúng với tên đăng nhập trên hệ thống HTV SSO.
+> - Khi nhân sự đăng nhập bằng HTV SSO, hệ thống **không dùng mật khẩu trong Supabase** (mật khẩu do HTV SSO quản lý và người dùng tự đổi tại HTV SSO).
+> - Mật khẩu trong Supabase chỉ dùng khi người dùng đăng nhập bằng phương thức **"Đăng nhập nội bộ"** (dự phòng khi ở ngoài mạng cơ quan).
+> - Xem thêm tài liệu chi tiết: [`docs/huong-dan-tich-hop-htv-sso.md`](huong-dan-tich-hop-htv-sso.md).
+
 Thay đổi có hiệu lực ngay (ghi thẳng Supabase).
 
 ### Cách 2 — Nạp hàng loạt bằng SQL

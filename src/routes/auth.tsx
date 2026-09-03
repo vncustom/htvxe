@@ -296,13 +296,16 @@ const LoginPage = (props: LoginPageProps) => {
                       </ul>
                       <div class="auth-diag-links">
                         <a href={`${ssoBase}/logout`} target="_blank" rel="noreferrer">
-                          1. Mở trang Đăng xuất HTV SSO ({ssoBase}/logout)
+                          1. Đăng xuất khỏi HTV SSO (mở tab mới {ssoBase}/logout)
                         </a>
-                        <a href={ssoHref}>
-                          2. Bấm vào đây để thử đăng nhập HTV SSO lại
+                        <a href="/auth/sso">
+                          2. Bấm vào đây để chuyển hướng tới HTV SSO
+                        </a>
+                        <a href={`${ssoBase}/login?next=${encodeURIComponent(props.ssoUrl ? props.ssoUrl.split("next=")[1] : "")}`} target="_blank" rel="noreferrer">
+                          3. Hoặc mở trang đăng nhập HTV SSO trong tab mới
                         </a>
                         <a href="/login">
-                          3. Quay về trang Đăng nhập mặc định
+                          4. Quay về trang Đăng nhập mặc định
                         </a>
                       </div>
                     </div>
@@ -313,7 +316,7 @@ const LoginPage = (props: LoginPageProps) => {
               {props.info ? <div class="auth-info">{props.info}</div> : null}
 
               {/* Nút Đăng nhập bằng HTV SSO */}
-              <a href={ssoHref} class="btn-sso" id="btn-htv-sso">
+              <a href="/auth/sso" class="btn-sso" id="btn-htv-sso">
                 <svg
                   width="18"
                   height="18"

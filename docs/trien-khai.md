@@ -97,6 +97,8 @@ Worker `htvxe` → **Settings** → **Variables and Secrets** → **Add** (loạ
 |---|---|
 | `DATABASE_URL` | chuỗi **Transaction pooler cổng 6543** ở mục 2 (kết thúc `/postgres`) |
 | `AUTH_SECRET` | chuỗi ngẫu nhiên dài (≥ 40 ký tự) |
+| `HTV_SSO_SECRET` | chuỗi **khoá bí mật dùng chung** (`secret_key`) với Dashboard HTV SSO (`10.1.1.215`). **Không để trong dấu ngoặc kép `"`**. |
+| `HTV_SSO_SERVER_URL` | *(tuỳ chọn)* `http://10.1.1.215` (mặc định) hoặc kèm cổng nếu Dashboard đổi cổng. |
 
 Tạo `AUTH_SECRET` không cần máy — mở DevTools Console của trình duyệt:
 ```js
@@ -110,8 +112,10 @@ btoa(String.fromCharCode(...crypto.getRandomValues(new Uint8Array(48))))
 
 ## 7. Kiểm tra
 
-- Mở `https://htvxe.<tài-khoản>.workers.dev` → đăng nhập `admin` / `123456`.
-- **Đổi mật khẩu admin** ngay (menu Quản trị → Sửa user).
+- Mở `https://htvxe.<tài-khoản>.workers.dev` → Trang đăng nhập có 2 phương thức:
+  1. **Đăng nhập bằng HTV SSO**: Bấm nút tím, đăng nhập bằng tài khoản/mật khẩu HTV của bạn tại `http://10.1.1.215`. Sau khi xác thực thành công, hệ thống tự động đưa vào app với username tương ứng.
+  2. **Đăng nhập nội bộ**: Nhập `admin` / `123456` (dùng khi ở ngoài mạng cơ quan hoặc tài khoản chưa có trên HTV SSO).
+- **Đổi mật khẩu admin nội bộ** ngay (menu Quản trị → Sửa user).
 - Tạo thử 1 đơn → mã dạng `HTV-2026-000001`.
 - Chuyển vài trang để chắc session không rớt (cookie `Secure` + HTTPS).
 
