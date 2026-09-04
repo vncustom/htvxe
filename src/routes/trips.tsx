@@ -239,12 +239,14 @@ trips.post("/chuyen/:id/ket-thuc", async (c) => {
 
   const odoEnd = intOrNull(f.get("odoEnd"));
   if (odoEnd == null) return c.text("Nhập số km lúc về.", 400);
-  if (odoEnd < bk.odoStart)
-    return c.redirect(`/chuyen-cua-toi?warn=${encodeURIComponent(`Số km về (${vi(odoEnd)}) phải ≥ km đi (${vi(bk.odoStart)}).`)}`);
+  if (odoEnd <= bk.odoStart)
+    return c.redirect(`/chuyen-cua-toi?warn=${encodeURIComponent(`Số km về (${vi(odoEnd)}) phải lớn hơn km đi (${vi(bk.odoStart)}).`)}`);
 
   const soKm = odoEnd - bk.odoStart;
   const gioRaw = String(f.get("gioKetThuc") ?? "");
   const gioKetThuc = gioRaw ? fromDatetimeLocal(gioRaw) : new Date();
+  if (bk.gioXuatBen && gioKetThuc <= bk.gioXuatBen)
+    return c.redirect(`/chuyen-cua-toi?warn=${encodeURIComponent(`Giờ kết thúc phải sau giờ xuất bến (${fmtDateTime(bk.gioXuatBen)}).`)}`);
 
   await db
     .update(tripLogs)
@@ -256,8 +258,6 @@ trips.post("/chuyen/:id/ket-thuc", async (c) => {
 
   let warn = "";
   if (soKm > KM_DAILY_WARN) warn = `Quãng đường ${vi(soKm)} km vượt ngưỡng ${vi(KM_DAILY_WARN)} km.`;
-  if (bk.gioXuatBen && gioKetThuc <= bk.gioXuatBen)
-    warn = `${warn} Giờ kết thúc không sau giờ xuất bến — đã lưu, nên kiểm tra lại.`.trim();
   return c.redirect(
     `/chuyen-cua-toi?ok=${encodeURIComponent(`Đã đóng chuyến. Quãng đường ${vi(soKm)} km.`)}${warn ? `&warn=${encodeURIComponent(warn)}` : ""}`,
   );

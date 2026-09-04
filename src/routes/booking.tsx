@@ -1,5 +1,5 @@
 import { Hono } from "hono";
-import { and, eq, isNull, ne } from "drizzle-orm";
+import { and, desc, eq, isNull, ne } from "drizzle-orm";
 import type { Env } from "../env";
 import {
   auditLog,
@@ -30,6 +30,34 @@ const intOrNull = (v: unknown): number | null => {
   const t = String(v ?? "").trim().replace(/[.,\s]/g, "");
   return /^\d+$/.test(t) ? Number(t) : null;
 };
+
+/* ---------- Lịch sử chỉnh sửa (audit_log) ---------- */
+
+const AUDIT_ACTION_LABEL: Record<string, string> = {
+  sua_don: "Sửa đơn",
+  dieu_chinh_km: "Điều chỉnh km",
+  dieu_chinh_dieu_xe: "Điều chỉnh xe/tài xế",
+};
+
+/** Tóm tắt diff JSON {before,after,lyDo} thành 1 dòng chỉ liệt kê field đã đổi. */
+function formatAuditDiff(diffJson: string | null): string {
+  if (!diffJson) return "";
+  try {
+    const d = JSON.parse(diffJson) as { before?: Record<string, unknown>; after?: Record<string, unknown>; lyDo?: string };
+    const parts: string[] = [];
+    if (d.before && d.after) {
+      for (const k of Object.keys(d.after)) {
+        const b = d.before[k];
+        const a = d.after[k];
+        if (JSON.stringify(b) !== JSON.stringify(a)) parts.push(`${k}: ${b ?? "—"} → ${a ?? "—"}`);
+      }
+    }
+    if (d.lyDo) parts.push(`Lý do: ${d.lyDo}`);
+    return parts.join("; ");
+  } catch {
+    return "";
+  }
+}
 
 /* ---------- Tạo đơn ---------- */
 
@@ -210,6 +238,8 @@ booking.get("/don/:id", async (c) => {
     busy = await findBusyInWindow(db, bk.startTime, bk.endTime, bk.id);
   }
 
+  const history = await db.select().from(auditLog).where(eq(auditLog.entityId, bk.id)).orderBy(desc(auditLog.atTime)).limit(50);
+
   return c.html(
     <Layout session={s} badges={badges} openTrips={openTrips} path="" title={bk.code}>
       <h2>
@@ -363,6 +393,23 @@ booking.get("/don/:id", async (c) => {
           <button class="danger">Hủy đơn</button>
         </form>
       ) : null}
+
+      {history.length > 0 ? (
+        <div class="card no-print" style="margin-top:16px">
+          <h3 style="margin-top:0">Lịch sử chỉnh sửa</h3>
+          <ul style="margin:0;padding-left:18px">
+            {history.map((h) => {
+              const summary = formatAuditDiff(h.diff);
+              return (
+                <li style="margin:6px 0">
+                  {fmtDateTime(h.atTime)} · <b>{h.byUsername}</b> · {AUDIT_ACTION_LABEL[h.action] ?? h.action}
+                  {summary ? <span class="muted"> — {summary}</span> : null}
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      ) : null}
     </Layout>,
   );
 });
@@ -410,6 +457,12 @@ booking.post("/don/:id/dispatch", async (c) => {
   const driverUsername = String(f.get("driverUsername") ?? "");
   if (!vehicleId || !driverUsername) return c.text("Chọn xe và lái xe.", 400);
 
+  const busy = await findBusyInWindow(db, bk.startTime, bk.endTime, bk.id);
+  const conflict = busy.find((b) => b.vehicleId === vehicleId || b.driverUsername === driverUsername);
+  if (conflict) {
+    return c.text(`Xe hoặc lái xe đang bận trong khung giờ này (đơn ${conflict.code}, ${fmtDateTime(conflict.startTime)}). Chọn xe/lái xe khác.`, 409);
+  }
+
   await db
     .insert(bookingDispatch)
     .values({ bookingId: id, vehicleId, driverUsername, ghiChuDoiXe: str(f.get("ghiChuDoiXe")), dispatchedBy: s.username, updatedBy: s.username })
@@ -442,6 +495,12 @@ booking.post("/don/:id/dieu-chinh-dieu-xe", async (c) => {
 
   const changed = vehicleId !== oldDispatch.vehicleId || driverUsername !== oldDispatch.driverUsername;
   if (changed) {
+    const busy = await findBusyInWindow(db, bk.startTime, bk.endTime, bk.id);
+    const conflict = busy.find((b) => b.vehicleId === vehicleId || b.driverUsername === driverUsername);
+    if (conflict) {
+      return c.text(`Xe hoặc lái xe đang bận trong khung giờ này (đơn ${conflict.code}, ${fmtDateTime(conflict.startTime)}). Chọn xe/lái xe khác.`, 409);
+    }
+
     await db
       .update(bookingDispatch)
       .set({
@@ -555,19 +614,23 @@ booking.post("/don/:id/sua", async (c) => {
   if (bk.status === STATUS.BAN_TU_CHOI) resetStatus = STATUS.CHO_BAN_DUYET;
   else if (bk.status === STATUS.DOI_XE_TU_CHOI) resetStatus = STATUS.CHO_DOI_XE;
 
+  const patch = {
+    startTime,
+    endTime: endRaw ? fromDatetimeLocal(endRaw) : null,
+    diemXuatPhat: (str(f.get("diemXuatPhat")) ?? "HTV") || "HTV",
+    diemDen: String(f.get("diemDen") ?? "").trim() || bk.diemDen,
+    noiDung: String(f.get("noiDung") ?? "").trim() || bk.noiDung,
+    bienTap: str(f.get("bienTap")),
+    quayPhim: str(f.get("quayPhim")),
+    soNguoi: intOrNull(f.get("soNguoi")),
+  };
+
   await db
     .update(bookings)
     .set({
-      startTime,
-      endTime: endRaw ? fromDatetimeLocal(endRaw) : null,
-      diemXuatPhat: (str(f.get("diemXuatPhat")) ?? "HTV") || "HTV",
-      diemDen: String(f.get("diemDen") ?? "").trim() || bk.diemDen,
-      noiDung: String(f.get("noiDung") ?? "").trim() || bk.noiDung,
-      bienTap: str(f.get("bienTap")),
+      ...patch,
       bienTapUsername,
-      quayPhim: str(f.get("quayPhim")),
       quayPhimUsername,
-      soNguoi: intOrNull(f.get("soNguoi")),
       ...(resetStatus ? { status: resetStatus } : {}),
       updatedAt: new Date(),
       updatedBy: s.username,
@@ -579,6 +642,36 @@ booking.post("/don/:id/sua", async (c) => {
       .update(bookingApprovals)
       .set({ deletedAt: new Date(), updatedBy: s.username })
       .where(eq(bookingApprovals.bookingId, id));
+  }
+
+  const before = {
+    startTime: fmtDateTime(bk.startTime),
+    endTime: bk.endTime ? fmtDateTime(bk.endTime) : null,
+    diemXuatPhat: bk.diemXuatPhat,
+    diemDen: bk.diemDen,
+    noiDung: bk.noiDung,
+    bienTap: bk.bienTap,
+    quayPhim: bk.quayPhim,
+    soNguoi: bk.soNguoi,
+  };
+  const after = {
+    startTime: fmtDateTime(patch.startTime),
+    endTime: patch.endTime ? fmtDateTime(patch.endTime) : null,
+    diemXuatPhat: patch.diemXuatPhat,
+    diemDen: patch.diemDen,
+    noiDung: patch.noiDung,
+    bienTap: patch.bienTap,
+    quayPhim: patch.quayPhim,
+    soNguoi: patch.soNguoi,
+  };
+  if (JSON.stringify(before) !== JSON.stringify(after)) {
+    await db.insert(auditLog).values({
+      entity: "booking",
+      entityId: id,
+      action: "sua_don",
+      byUsername: s.username,
+      diff: JSON.stringify({ before, after }),
+    });
   }
 
   if (bienTapUsername && bienTapUsername !== bk.bienTapUsername) {

@@ -165,8 +165,10 @@ export type BusyRow = {
   diemDen: string;
   startTime: Date;
   endTime: Date | null;
+  vehicleId: string;
   vehicleName: string;
   plateNo: string;
+  driverUsername: string;
   driverName: string;
 };
 
@@ -184,8 +186,10 @@ export async function findBusyInWindow(
       diemDen: bookings.diemDen,
       startTime: bookings.startTime,
       endTime: bookings.endTime,
+      vehicleId: bookingDispatch.vehicleId,
       vehicleName: vehicles.name,
       plateNo: vehicles.plateNo,
+      driverUsername: bookingDispatch.driverUsername,
       driverName: users.fullName,
     })
     .from(bookings)
@@ -209,8 +213,10 @@ export async function findBusyInWindow(
       diemDen: r.diemDen,
       startTime: r.startTime,
       endTime: r.endTime,
+      vehicleId: r.vehicleId,
       vehicleName: r.vehicleName,
       plateNo: r.plateNo,
+      driverUsername: r.driverUsername,
       driverName: r.driverName,
     }));
 }

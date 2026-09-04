@@ -1,7 +1,7 @@
 import { Hono } from "hono";
 import { and, asc, eq, isNull } from "drizzle-orm";
 import type { Env } from "../env";
-import { bookings } from "../db/schema";
+import { bookingDispatch, bookings, users, vehicles } from "../db/schema";
 import { pageCtx } from "../lib/page";
 import { getOpenTrips } from "../lib/queries";
 import { isBanLeader, isDoiXe } from "../lib/rbac";
@@ -52,9 +52,48 @@ queues.get("/dieu-xe", async (c) => {
     .where(and(isNull(bookings.deletedAt), eq(bookings.status, STATUS.CHO_DOI_XE)))
     .orderBy(asc(bookings.startTime));
   const open = await getOpenTrips(db);
+
+  const daDieu = await db
+    .select({
+      id: bookings.id,
+      code: bookings.code,
+      startTime: bookings.startTime,
+      diemXuatPhat: bookings.diemXuatPhat,
+      diemDen: bookings.diemDen,
+      vehicleName: vehicles.name,
+      plateNo: vehicles.plateNo,
+      driverName: users.fullName,
+    })
+    .from(bookings)
+    .innerJoin(bookingDispatch, eq(bookingDispatch.bookingId, bookings.id))
+    .innerJoin(vehicles, eq(vehicles.id, bookingDispatch.vehicleId))
+    .innerJoin(users, eq(users.username, bookingDispatch.driverUsername))
+    .where(and(isNull(bookings.deletedAt), eq(bookings.status, STATUS.DA_DIEU_XE), isNull(bookingDispatch.deletedAt)))
+    .orderBy(asc(bookings.startTime));
+
   return c.html(
     <Layout session={s} badges={badges} openTrips={openTrips} path="/dieu-xe" title="Điều xe">
       <h2>Điều xe</h2>
+      {daDieu.length ? (
+        <div class="card">
+          <h3>Đã điều xe, chưa chạy ({daDieu.length})</h3>
+          <table>
+            <thead><tr><th>Mã</th><th>Thời gian</th><th>Hành trình</th><th>Xe</th><th>Lái xe</th><th></th></tr></thead>
+            <tbody>
+              {daDieu.map((r) => (
+                <tr>
+                  <td>{r.code}</td>
+                  <td>{fmtDateTime(r.startTime)}</td>
+                  <td>{r.diemXuatPhat} → {r.diemDen}</td>
+                  <td>{r.vehicleName} ({r.plateNo})</td>
+                  <td>{r.driverName}</td>
+                  <td><a class="btn sec" href={`/don/${r.id}`}>Điều chỉnh</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
       {open.length ? (
         <div class="card">
           <h3>Xe đang chạy chưa đóng chuyến ({open.length})</h3>
