@@ -45,6 +45,7 @@ app.use("/thong-ke", requireAuth);
 app.use("/thong-ke/*", requireAuth);
 app.use("/quan-tri", requireAuth);
 app.use("/quan-tri/*", requireAuth);
+app.use("/api/*", requireAuth);
 
 app.route("/", misc);
 app.route("/", lich);

@@ -254,6 +254,7 @@ async function statRows(db: DB, from: Date, to: Date) {
       gioXuatBen: tripLogs.gioXuatBen,
       gioKetThuc: tripLogs.gioKetThuc,
       isPhatSinh: bookings.isPhatSinh,
+      donViYeuCau: bookings.donViYeuCau,
     })
     .from(tripLogs)
     .innerJoin(bookings, eq(bookings.id, tripLogs.bookingId))
@@ -287,6 +288,34 @@ extra.get("/thong-ke", async (c) => {
     v.trips++;
     v.km += r.soKm ?? 0;
     perVeh.set(key, v);
+  }
+
+  const units = await db
+    .selectDistinct({ donViYeuCau: bookings.donViYeuCau })
+    .from(bookings)
+    .where(isNull(bookings.deletedAt))
+    .orderBy(asc(bookings.donViYeuCau));
+
+  const donVi = c.req.query("donVi") || "";
+  let donViStats: { total: Agg; perDriver: [string, Agg][] } | null = null;
+  if (donVi) {
+    const total: Agg = { name: donVi, trips: 0, phatSinh: 0, km: 0, hours: 0 };
+    const perDriverUnit = new Map<string, Agg>();
+    for (const r of rows) {
+      if (r.donViYeuCau !== donVi) continue;
+      total.trips++;
+      if (r.isPhatSinh) total.phatSinh++;
+      total.km += r.soKm ?? 0;
+      const hours = r.gioXuatBen && r.gioKetThuc ? Math.max(0, (r.gioKetThuc.getTime() - r.gioXuatBen.getTime()) / 3.6e6) : 0;
+      total.hours += hours;
+      const d = perDriverUnit.get(r.driver) ?? { name: r.driverName, trips: 0, phatSinh: 0, km: 0, hours: 0 };
+      d.trips++;
+      if (r.isPhatSinh) d.phatSinh++;
+      d.km += r.soKm ?? 0;
+      d.hours += hours;
+      perDriverUnit.set(r.driver, d);
+    }
+    donViStats = { total, perDriver: [...perDriverUnit.entries()].sort((a, b) => b[1].km - a[1].km) };
   }
 
   return c.html(
@@ -324,6 +353,41 @@ extra.get("/thong-ke", async (c) => {
           ))}
         </tbody>
       </table>
+
+      <h3>Theo đơn vị yêu cầu</h3>
+      <form class="row no-print" method="get" style="margin-bottom:14px">
+        <input type="hidden" name="tu" value={tu} />
+        <input type="hidden" name="den" value={den} />
+        <div>
+          <label>Đơn vị yêu cầu</label>
+          <select name="donVi">
+            <option value="">— Chọn đơn vị —</option>
+            {units.map((u) => <option value={u.donViYeuCau ?? ""} selected={u.donViYeuCau === donVi}>{u.donViYeuCau}</option>)}
+          </select>
+        </div>
+        <div style="display:flex;align-items:flex-end"><button class="sec">Xem theo đơn vị</button></div>
+      </form>
+      {donViStats ? (
+        <div class="card">
+          <p style="margin:0">
+            <b>{donVi}</b> — <b>{donViStats.total.trips}</b> chuyến
+            {donViStats.total.phatSinh ? ` (${donViStats.total.phatSinh} phát sinh)` : ""} ·{" "}
+            <b>{vi(donViStats.total.km)}</b> km · <b>{donViStats.total.hours.toFixed(1)}</b> giờ chạy
+          </p>
+          {donViStats.perDriver.length ? (
+            <table style="margin-top:10px">
+              <thead><tr><th>Lái xe</th><th>Chuyến</th><th>Phát sinh</th><th>Tổng km</th><th>Giờ chạy</th></tr></thead>
+              <tbody>
+                {donViStats.perDriver.map(([, d]) => (
+                  <tr><td>{d.name}</td><td>{d.trips}</td><td>{d.phatSinh}</td><td>{vi(d.km)}</td><td>{d.hours.toFixed(1)}</td></tr>
+                ))}
+              </tbody>
+            </table>
+          ) : (
+            <p class="muted" style="margin:8px 0 0">Không có chuyến nào của đơn vị này trong khoảng ngày đã chọn.</p>
+          )}
+        </div>
+      ) : null}
     </Layout>,
   );
 });

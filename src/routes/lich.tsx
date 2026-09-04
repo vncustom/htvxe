@@ -70,7 +70,11 @@ lich.get("/lich", async (c) => {
       </div>
       <div class="grid7">
         {days.map((d, i) => (
-          <div class={d === today ? "day today" : "day"}>
+          <div
+            class={d === today ? "day today" : "day"}
+            title="Bấm để tạo đơn cho ngày này"
+            onclick={`if(!event.target.closest('.ev'))location='/don/moi?ngay=${d}'`}
+          >
             <div class="dh">
               <span>{weekdayLabel((i + 1) % 7)} {ddmm(d)}</span>
               {d === today ? <span>Hôm nay</span> : null}

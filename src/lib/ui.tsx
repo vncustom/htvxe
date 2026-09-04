@@ -74,8 +74,14 @@ button.ok,.btn.ok{background:#16a34a}button.ok:hover,.btn.ok:hover{background:#1
 .top .bell:hover{text-decoration:none;filter:brightness(1.15)}
 .top .bell .badge{position:absolute;top:-7px;right:-9px;margin:0;min-width:16px;line-height:16px;font-size:10px;padding:0 4px}
 .grid7{display:grid;grid-template-columns:repeat(7,1fr);gap:8px}
-.day{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px;min-height:132px;box-shadow:var(--shadow)}
+.day{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:8px;min-height:132px;box-shadow:var(--shadow);cursor:pointer}
 .day.today{border-color:var(--brand);box-shadow:0 0 0 2px rgba(37,99,235,.25),var(--shadow)}
+.day:hover{background:#f8fafc}
+.mention-wrap{position:relative}
+.mention-drop{position:absolute;top:100%;left:0;right:0;z-index:20;margin-top:2px;background:var(--surface);border:1px solid var(--line);border-radius:8px;box-shadow:var(--shadow);max-height:180px;overflow-y:auto}
+.mention-drop div{padding:7px 11px;font-size:13.5px;cursor:pointer}
+.mention-drop div:hover,.mention-drop div.active{background:#eef2f7}
+.mention-drop .muted{padding:7px 11px}
 .day .dh{font-size:11.5px;font-weight:700;color:var(--muted);margin-bottom:6px;display:flex;justify-content:space-between}
 .day.today .dh{color:var(--brand)}
 .ev{display:block;font-size:11px;padding:4px 6px;border-radius:6px;margin-bottom:4px;color:#fff;line-height:1.3;font-weight:600}
@@ -115,7 +121,7 @@ export const Layout: FC<
     openTrips?: OpenTrip[];
   }>
 > = ({ session: s, badges: b, path, title, openTrips, children }) => {
-  const notif = b.duyet + b.dieuXe + b.chuyenLaiXe + (openTrips?.length ?? 0) + b.donCuaToi;
+  const notif = b.duyet + b.dieuXe + b.chuyenLaiXe + (openTrips?.length ?? 0) + b.donCuaToi + b.thongBaoChuaDoc;
   const nav: NavItem[] = [
     { href: "/lich", label: "Lịch tuần", show: true },
     { href: "/cua-toi", label: "Đơn của tôi", show: true, badge: b.donCuaToi },
@@ -126,7 +132,7 @@ export const Layout: FC<
     { href: "/thong-ke/toi", label: "Thống kê của tôi", show: s.isDriver },
     { href: "/cong-to-met", label: "Công-tơ-mét", show: isDoiXe(s) || isAdmin(s) },
     { href: "/thong-ke", label: "Thống kê", show: isDoiXe(s) || isAdmin(s) || isLanhDaoDai(s) },
-    { href: "/thong-bao", label: "Thông báo", show: true },
+    { href: "/thong-bao", label: "Thông báo", show: true, badge: b.thongBaoChuaDoc },
     { href: "/quan-tri", label: "Quản trị", show: isAdmin(s) },
   ];
   return (
@@ -193,6 +199,7 @@ export const Layout: FC<
             <main class="content">{children}</main>
           </div>
         </div>
+        <script src="/mention.js" defer></script>
       </body>
     </html>
   );

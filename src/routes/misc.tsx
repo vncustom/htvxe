@@ -1,7 +1,8 @@
 import { Hono } from "hono";
-import { and, desc, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, ilike, isNull, or } from "drizzle-orm";
 import type { Env } from "../env";
-import { bookings } from "../db/schema";
+import { bookings, notifications, users } from "../db/schema";
+import { must } from "../lib/session";
 import { pageCtx } from "../lib/page";
 import { Layout, StatusPill } from "../lib/ui";
 import { fmtDateTime } from "../lib/tz";
@@ -9,6 +10,26 @@ import { isBanLeader, isDoiXe } from "../lib/rbac";
 import { STATUS } from "../lib/status";
 
 export const misc = new Hono<Env>();
+
+/** Tìm user cho dropdown tag @username (Biên tập / Quay phim). */
+misc.get("/api/nguoi-dung", async (c) => {
+  must(c);
+  const db = c.get("db");
+  const q = (c.req.query("q") ?? "").trim();
+  if (q.length < 2) return c.json([]);
+  const rows = await db
+    .select({ username: users.username, fullName: users.fullName })
+    .from(users)
+    .where(
+      and(
+        isNull(users.deletedAt),
+        eq(users.isActive, true),
+        or(ilike(users.fullName, `%${q}%`), ilike(users.username, `%${q}%`)),
+      ),
+    )
+    .limit(8);
+  return c.json(rows);
+});
 
 misc.get("/", (c) => c.redirect(c.get("session") ? "/lich" : "/login"));
 
@@ -119,7 +140,7 @@ misc.get("/cua-toi", async (c) => {
 });
 
 misc.get("/thong-bao", async (c) => {
-  const { s, badges: b, openTrips } = await pageCtx(c);
+  const { s, db, badges: b, openTrips } = await pageCtx(c);
   const items: { text: string; href: string }[] = [];
   if (isBanLeader(s) && b.duyet) items.push({ text: `${b.duyet} đơn chờ Ban duyệt`, href: "/duyet" });
   if (isDoiXe(s) && b.dieuXe) items.push({ text: `${b.dieuXe} đơn chờ điều xe`, href: "/dieu-xe" });
@@ -127,10 +148,38 @@ misc.get("/thong-bao", async (c) => {
   for (const t of openTrips) items.push({ text: `Chuyến ${t.code} đang chạy chưa đóng${t.overdue ? " — QUÁ GIỜ" : ""}`, href: `/don/${t.id}` });
   if (b.donCuaToi) items.push({ text: `${b.donCuaToi} đơn của bạn có cập nhật (duyệt / từ chối / điều xe)`, href: "/cua-toi" });
 
+  const mine = await db
+    .select()
+    .from(notifications)
+    .where(eq(notifications.username, s.username))
+    .orderBy(desc(notifications.createdAt))
+    .limit(50);
+
+  if (mine.some((n) => !n.readAt)) {
+    await db.update(notifications).set({ readAt: new Date() }).where(and(eq(notifications.username, s.username), isNull(notifications.readAt)));
+  }
+
   return c.html(
     <Layout session={s} badges={b} openTrips={openTrips} path="/thong-bao" title="Thông báo">
       <h2>Thông báo</h2>
-      {items.length === 0 ? <p class="muted">Không có thông báo.</p> : (
+      {mine.length > 0 ? (
+        <>
+          <h3 style="margin-top:0">Thông báo mới</h3>
+          <div class="card">
+            <ul style="margin:0;padding-left:18px">
+              {mine.map((n) => (
+                <li style="margin:6px 0">
+                  {n.bookingId ? <a href={`/don/${n.bookingId}`}>{n.message}</a> : n.message}{" "}
+                  <span class="muted">· {fmtDateTime(n.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        </>
+      ) : null}
+      {items.length === 0 ? (
+        mine.length === 0 ? <p class="muted">Không có thông báo.</p> : null
+      ) : (
         <div class="card">
           <ul style="margin:0;padding-left:18px">
             {items.map((i) => <li style="margin:6px 0"><a href={i.href}>{i.text}</a></li>)}

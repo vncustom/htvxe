@@ -41,6 +41,7 @@ trips.get("/chuyen-cua-toi", async (c) => {
       diemDen: bookings.diemDen,
       noiDung: bookings.noiDung,
       bienTap: bookings.bienTap,
+      bienTapUsername: bookings.bienTapUsername,
       quayPhim: bookings.quayPhim,
       vehicleName: vehicles.name,
       plateNo: vehicles.plateNo,
@@ -65,9 +66,18 @@ trips.get("/chuyen-cua-toi", async (c) => {
     )
     .orderBy(asc(bookings.startTime));
 
-  // SĐT biên tập (nếu tên biên tập khớp họ tên một user) — tra 1 lượt.
+  // SĐT biên tập: ưu tiên username đã tag (chính xác), fallback khớp mờ theo họ tên (dữ liệu cũ).
+  const bienTapUsernames = [...new Set(rows.map((r) => r.bienTapUsername).filter((x): x is string => !!x))];
   const bienTapNames = [...new Set(rows.map((r) => r.bienTap).filter((x): x is string => !!x))];
+  const phoneByUsername = new Map<string, string>();
   const phoneByName = new Map<string, string>();
+  if (bienTapUsernames.length) {
+    const eds = await db
+      .select({ username: users.username, phone: users.phone })
+      .from(users)
+      .where(and(inArray(users.username, bienTapUsernames), isNull(users.deletedAt)));
+    for (const e of eds) if (e.phone) phoneByUsername.set(e.username, e.phone);
+  }
   if (bienTapNames.length) {
     const eds = await db
       .select({ fullName: users.fullName, phone: users.phone })
@@ -92,7 +102,10 @@ trips.get("/chuyen-cua-toi", async (c) => {
               <tr><th style="width:130px">Hành trình</th><td>{r.diemXuatPhat} → {r.diemDen} · {fmtDateTime(r.startTime)}</td></tr>
               <tr><th>Xe</th><td><b>{r.vehicleName}</b> ({r.plateNo})</td></tr>
               <tr><th>Lái xe</th><td>{r.driverName}{r.driverPhone ? ` · ☎ ${r.driverPhone}` : ""}</td></tr>
-              <tr><th>Biên tập</th><td>{r.bienTap ? `${r.bienTap}${phoneByName.get(r.bienTap) ? ` · ☎ ${phoneByName.get(r.bienTap)}` : ""}` : "—"}</td></tr>
+              <tr><th>Biên tập</th><td>{r.bienTap ? (() => {
+                const phone = (r.bienTapUsername && phoneByUsername.get(r.bienTapUsername)) || phoneByName.get(r.bienTap);
+                return `${r.bienTap}${phone ? ` · ☎ ${phone}` : ""}`;
+              })() : "—"}</td></tr>
               {r.quayPhim ? <tr><th>Quay phim</th><td>{r.quayPhim}</td></tr> : null}
               <tr><th>Nội dung</th><td>{r.noiDung}</td></tr>
             </tbody>

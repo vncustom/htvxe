@@ -4,6 +4,7 @@ import {
   bookingApprovals,
   bookingDispatch,
   bookings,
+  notifications,
   tripLogs,
   users,
   vehicles,
@@ -94,6 +95,7 @@ export type Badges = {
   chuyenLaiXe: number;
   chuyenChuaDong: number;
   donCuaToi: number;
+  thongBaoChuaDoc: number;
 };
 
 const count = async (db: DB, where: SQL<unknown> | undefined): Promise<number> => {
@@ -103,7 +105,7 @@ const count = async (db: DB, where: SQL<unknown> | undefined): Promise<number> =
 
 export async function getBadges(db: DB, s: Session): Promise<Badges> {
   const alive = isNull(bookings.deletedAt);
-  const [duyet, dieuXe, chuyenLaiXe, chuyenChuaDong, donCuaToi] = await Promise.all([
+  const [duyet, dieuXe, chuyenLaiXe, chuyenChuaDong, donCuaToi, thongBaoChuaDoc] = await Promise.all([
     isBanLeader(s) && s.dsBan
       ? count(db, and(alive, eq(bookings.status, STATUS.CHO_BAN_DUYET), eq(bookings.donViYeuCau, s.dsBan)))
       : Promise.resolve(0),
@@ -146,8 +148,13 @@ export async function getBadges(db: DB, s: Session): Promise<Badges> {
         inArray(bookings.status, [STATUS.BAN_TU_CHOI, STATUS.DOI_XE_TU_CHOI, STATUS.DA_DIEU_XE]),
       ),
     ),
+    db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(eq(notifications.username, s.username), isNull(notifications.readAt)))
+      .then((r) => r[0]?.n ?? 0),
   ]);
-  return { duyet, dieuXe, chuyenLaiXe, chuyenChuaDong, donCuaToi };
+  return { duyet, dieuXe, chuyenLaiXe, chuyenChuaDong, donCuaToi, thongBaoChuaDoc };
 }
 
 export const effectiveEnd = (start: Date, end: Date | null) =>

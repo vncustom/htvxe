@@ -65,7 +65,9 @@ export const bookings = pgTable(
     diemDen: text("diem_den").notNull(),
     noiDung: text("noi_dung").notNull(),
     bienTap: text("bien_tap"),
+    bienTapUsername: text("bien_tap_username"),
     quayPhim: text("quay_phim"),
+    quayPhimUsername: text("quay_phim_username"),
     soNguoi: integer("so_nguoi"),
     isPhatSinh: boolean("is_phat_sinh").notNull().default(false),
     status: text("status").notNull().default("cho_ban_duyet"),
@@ -175,6 +177,20 @@ export const alertAcks = pgTable(
     deletedAt: timestamp("deleted_at", { withTimezone: true, mode: "date" }),
   },
   (t) => [uniqueIndex("alert_kind_ref_idx").on(t.kind, t.refId)],
+);
+
+export const notifications = pgTable(
+  "notifications",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    username: text("username").notNull(),
+    bookingId: uuid("booking_id"),
+    kind: text("kind").notNull(),
+    message: text("message").notNull(),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    readAt: timestamp("read_at", { withTimezone: true, mode: "date" }),
+  },
+  (t) => [index("notif_username_idx").on(t.username, t.readAt)],
 );
 
 
