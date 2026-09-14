@@ -23,6 +23,7 @@ Tài liệu chi tiết trong [`docs/`](docs/):
 | Auth | JWT trong cookie (`hono/jwt`, HS256) + PBKDF2-SHA256 (WebCrypto) |
 | Giờ VN / CSV / in | `Intl` thuần (`Asia/Ho_Chi_Minh` cố định) + `@media print` |
 | PWA | `manifest.webmanifest` + `logo.png` — cài được như app trên điện thoại |
+| Push | Web Push (VAPID) qua [`@block65/webcrypto-web-push`](https://github.com/block65/webcrypto-web-push) — chạy bằng WebCrypto thuần, không cần `node:crypto` |
 
 ## Thư mục
 
@@ -32,7 +33,7 @@ src/
   env.ts           kiểu Bindings / Session
   db/schema.ts     lược đồ Drizzle — NGUỒN SỰ THẬT, 9 bảng
   db/client.ts     kết nối postgres.js cho mỗi request (prepare:false cho pooler 6543)
-  lib/             password, session, page, rbac, status, tz, odometer, queries, ui
+  lib/             password, session, page, rbac, status, tz, odometer, queries, ui, notify, push, vehicleGroups
   routes/
     auth.tsx       đăng nhập / đăng xuất
     lich.tsx       lịch tuần (chọn ngày + chú thích màu)
@@ -42,13 +43,15 @@ src/
     trips.tsx      Chuyến của tôi (lái xe nhập km đi/về; hiện SĐT biên tập + lái xe)
     extra.tsx      công-tơ-mét + cảnh báo km ngoài đơn, thống kê + CSV, quản trị
     admin.tsx      form thêm/sửa user + xe
-public/            logo.png, icon.svg, manifest.webmanifest  (Workers phục vụ ở "/")
+    push.ts        API Web Push: /api/push/vapid-public-key, /subscribe, /unsubscribe
+public/            logo.png, icon.svg, manifest.webmanifest, sw.js (service worker), push.js (subscribe UI)
 scripts/
-  seed.sql         367 user + 4 xe (mật khẩu 123456) — dán vào Supabase SQL Editor
-  demo.sql         dữ liệu demo phủ mọi trạng thái + luồng
-  demo-cleanup.sql xoá sạch dữ liệu demo, giữ user + xe
-  seed.ts          (tuỳ chọn) seed bằng tsx từ máy local, cần scripts/users.json
-drizzle/           SQL khởi tạo do drizzle-kit sinh (0000_init.sql)
+  seed.sql               367 user + 4 xe (mật khẩu 123456) — dán vào Supabase SQL Editor
+  demo.sql               dữ liệu demo phủ mọi trạng thái + luồng
+  demo-cleanup.sql       xoá sạch dữ liệu demo, giữ user + xe
+  seed.ts                (tuỳ chọn) seed bằng tsx từ máy local, cần scripts/users.json
+  generate-vapid-keys.ts tạo cặp khoá VAPID cho Web Push (chạy 1 lần khi setup / khi đổi khoá)
+drizzle/           SQL khởi tạo do drizzle-kit sinh (0000_init.sql, ...)
 ```
 
 ## Dựng nhanh (không cần máy local)
@@ -61,6 +64,7 @@ drizzle/           SQL khởi tạo do drizzle-kit sinh (0000_init.sql)
 4. Worker `htvxe` → **Settings → Variables and Secrets** → thêm Secret:
    - `DATABASE_URL` = chuỗi **Transaction pooler cổng 6543** của Supabase
    - `AUTH_SECRET` = chuỗi ngẫu nhiên dài
+   - `VAPID_PRIVATE_KEY` = tạo bằng `npx tsx scripts/generate-vapid-keys.ts` (Web Push — xem mục dưới)
 5. Mở `https://htvxe.<tài-khoản>.workers.dev` → đăng nhập `admin` / `123456`.
 
 Từ đó mỗi `git push` lên `main` → Cloudflare tự build & deploy. Xem đầy đủ ở
@@ -96,3 +100,36 @@ npm run deploy                      # đẩy thẳng lên Cloudflare (không qua
   trang **"Thống kê của tôi"**.
 - **Quản trị**: thêm/sửa user + xe, đặt lại mật khẩu về `123456`, bảng chất lượng dữ liệu.
 - **PWA**: cài như app điện thoại, bàn phím số cho lái xe nhập km.
+- **Web Push**: nút "🔔 Bật thông báo trên máy này" cạnh nút Đăng xuất — bấm 1 lần để nhận
+  thông báo đẩy ra điện thoại/máy tính khi có đơn mới cần duyệt/điều xe, đơn được duyệt/từ
+  chối/điều xe, bị tag @biên tập·@quay phim, đổi xe/lái xe, hoặc đơn bị hủy. Xem mục
+  [Web Push](#web-push) để biết cách tắt và cách setup.
+
+## Web Push
+
+Đẩy thông báo ra điện thoại/máy tính bằng chuẩn Web Push (VAPID), không qua bên thứ 3
+(Zalo/SMS/Firebase) — Cloudflare Worker tự ký và gửi thẳng tới dịch vụ push của
+Chrome/Safari/Edge. Code ở [`src/lib/push.ts`](src/lib/push.ts), [`src/lib/notify.ts`](src/lib/notify.ts),
+[`src/routes/push.ts`](src/routes/push.ts), [`public/sw.js`](public/sw.js), [`public/push.js`](public/push.js).
+
+**Cách tắt thông báo trên điện thoại:**
+
+1. **Trong app (cách chính)**: mở app → bấm nút **"🔔 Đã bật thông báo trên máy này"**
+   cạnh nút Đăng xuất → nút đổi thành "Bật thông báo" là đã tắt xong (huỷ subscribe, xoá
+   khỏi CSDL). Phải bấm riêng trên từng thiết bị/trình duyệt đã bật.
+2. **Không mở được app / muốn chặn hẳn ở trình duyệt**:
+   - **Android (Chrome)**: chạm giữ icon thông báo hoặc vào Chrome ⋮ → *Cài đặt* → *Thông
+     báo* (hoặc *Cài đặt trang* của riêng app) → tắt cho app "Đặt xe Công tác HTV".
+   - **iPhone (đã "Thêm vào màn hình chính")**: *Cài đặt* → *Thông báo* → tìm app → tắt,
+     hoặc xoá icon khỏi màn hình chính.
+   - **Máy tính (Chrome/Edge)**: bấm icon 🔒/ⓘ trên thanh địa chỉ → *Thông báo* → *Chặn*.
+
+**Setup lần đầu (đã làm — ghi lại để sau này đổi khoá):**
+
+1. Tạo cặp khoá: `npx tsx scripts/generate-vapid-keys.ts`.
+2. `VAPID_PUBLIC_KEY` + `VAPID_SUBJECT` (email hoặc URL liên hệ, **không cần** hộp thư
+   thật) → đặt trong `wrangler.jsonc` (`vars`, không bí mật).
+3. `VAPID_PRIVATE_KEY` → đặt bằng `wrangler secret put VAPID_PRIVATE_KEY` (bí mật, KHÔNG
+   commit vào git).
+4. Đổi khoá = tạo cặp mới rồi lặp lại bước 2–3 — mọi người phải bấm lại nút "Bật thông
+   báo" vì subscription cũ gắn với khoá cũ sẽ không gửi được nữa.
