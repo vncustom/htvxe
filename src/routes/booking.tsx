@@ -13,8 +13,8 @@ import {
 } from "../db/schema";
 import { must } from "../lib/session";
 import { pageCtx } from "../lib/page";
-import { getBadges, genBookingCode, loadBooking, findBusyInWindow } from "../lib/queries";
-import { notify, verifyTaggedUser } from "../lib/notify";
+import { getBadges, genBookingCode, loadBooking, findBusyInWindow, listApprovers, listDoiXeUsers } from "../lib/queries";
+import { notify, notifyMany, verifyTaggedUser } from "../lib/notify";
 import { STATUS } from "../lib/status";
 import { canApproveFor, canCancelBooking, canEditBooking, isDoiXe, isVpDaiLeader } from "../lib/rbac";
 import { fromDatetimeLocal, fmtDateTime, toDatetimeLocal } from "../lib/tz";
@@ -214,10 +214,18 @@ booking.post("/don", async (c) => {
     .returning({ id: bookings.id });
 
   if (bienTapUsername) {
-    await notify(db, { username: bienTapUsername, bookingId: created.id, kind: "tagged", message: `Bạn được gắn thẻ Biên tập cho đơn ${code} (${diemDen})`, exclude: s.username });
+    await notify(c, { username: bienTapUsername, bookingId: created.id, kind: "tagged", message: `Bạn được gắn thẻ Biên tập cho đơn ${code} (${diemDen})`, exclude: s.username });
   }
   if (quayPhimUsername) {
-    await notify(db, { username: quayPhimUsername, bookingId: created.id, kind: "tagged", message: `Bạn được gắn thẻ Quay phim cho đơn ${code} (${diemDen})`, exclude: s.username });
+    await notify(c, { username: quayPhimUsername, bookingId: created.id, kind: "tagged", message: `Bạn được gắn thẻ Quay phim cho đơn ${code} (${diemDen})`, exclude: s.username });
+  }
+
+  if (isPhatSinh) {
+    const doiXe = await listDoiXeUsers(db);
+    await notifyMany(c, { usernames: doiXe, bookingId: created.id, kind: "cho_dieu_xe", message: `Đơn phát sinh ${code} (${diemDen}) đang chờ điều xe`, exclude: s.username });
+  } else {
+    const approvers = await listApprovers(db, donVi);
+    await notifyMany(c, { usernames: approvers, bookingId: created.id, kind: "cho_duyet", message: `Đơn ${code} (${diemDen}) đang chờ Ban duyệt`, exclude: s.username });
   }
 
   return c.redirect(`/don/${created.id}`);
@@ -486,6 +494,13 @@ booking.post("/don/:id/approve", async (c) => {
       set: { approverUsername: s.username, quyetDinh: decision, ghiChu: str(f.get("ghiChu")), decidedAt: new Date(), updatedBy: s.username, deletedAt: null },
     });
   await db.update(bookings).set({ status: next, updatedAt: new Date(), updatedBy: s.username }).where(eq(bookings.id, id));
+
+  if (next === STATUS.CHO_DOI_XE) {
+    const doiXe = await listDoiXeUsers(db);
+    await notifyMany(c, { usernames: doiXe, bookingId: id, kind: "cho_dieu_xe", message: `Đơn ${bk.code} (${bk.diemDen}) đã được Ban duyệt, đang chờ điều xe`, exclude: s.username });
+  } else {
+    await notify(c, { username: bk.requesterUsername, bookingId: id, kind: "ban_tu_choi", message: `Đơn ${bk.code} của bạn bị Ban từ chối`, exclude: s.username });
+  }
   return c.redirect(`/don/${id}`);
 });
 
@@ -501,6 +516,7 @@ booking.post("/don/:id/dispatch", async (c) => {
 
   if (String(f.get("decision") ?? "dieu") === "tu_choi") {
     await db.update(bookings).set({ status: STATUS.DOI_XE_TU_CHOI, updatedAt: new Date(), updatedBy: s.username }).where(eq(bookings.id, id));
+    await notify(c, { username: bk.requesterUsername, bookingId: id, kind: "doi_xe_tu_choi", message: `Đơn ${bk.code} bị Đội xe từ chối`, exclude: s.username });
     return c.redirect(`/don/${id}`);
   }
   const vehicleId = String(f.get("vehicleId") ?? "");
@@ -521,6 +537,9 @@ booking.post("/don/:id/dispatch", async (c) => {
       set: { vehicleId, driverUsername, ghiChuDoiXe: str(f.get("ghiChuDoiXe")), dispatchedBy: s.username, dispatchedAt: new Date(), updatedBy: s.username, deletedAt: null },
     });
   await db.update(bookings).set({ status: STATUS.DA_DIEU_XE, updatedAt: new Date(), updatedBy: s.username }).where(eq(bookings.id, id));
+
+  await notify(c, { username: bk.requesterUsername, bookingId: id, kind: "da_dieu_xe", message: `Đơn ${bk.code} của bạn đã được bố trí xe`, exclude: s.username });
+  await notify(c, { username: driverUsername, bookingId: id, kind: "assigned", message: `Bạn được phân công chuyến ${bk.code} (${bk.diemXuatPhat} → ${bk.diemDen})`, exclude: s.username });
   return c.redirect(`/don/${id}`);
 });
 
@@ -576,15 +595,15 @@ booking.post("/don/:id/dieu-chinh-dieu-xe", async (c) => {
     });
 
     if (driverUsername !== oldDispatch.driverUsername) {
-      await notify(db, { username: oldDispatch.driverUsername, bookingId: id, kind: "redispatch_removed", message: `Bạn đã được gỡ khỏi chuyến ${bk.code}`, exclude: s.username });
-      await notify(db, { username: driverUsername, bookingId: id, kind: "redispatch_assigned", message: `Bạn được phân công chuyến ${bk.code} (${bk.diemXuatPhat} → ${bk.diemDen})`, exclude: s.username });
+      await notify(c, { username: oldDispatch.driverUsername, bookingId: id, kind: "redispatch_removed", message: `Bạn đã được gỡ khỏi chuyến ${bk.code}`, exclude: s.username });
+      await notify(c, { username: driverUsername, bookingId: id, kind: "redispatch_assigned", message: `Bạn được phân công chuyến ${bk.code} (${bk.diemXuatPhat} → ${bk.diemDen})`, exclude: s.username });
     }
-    await notify(db, { username: bk.requesterUsername, bookingId: id, kind: "redispatch", message: `Đơn ${bk.code} của bạn vừa được điều chỉnh xe/tài xế`, exclude: s.username });
+    await notify(c, { username: bk.requesterUsername, bookingId: id, kind: "redispatch", message: `Đơn ${bk.code} của bạn vừa được điều chỉnh xe/tài xế`, exclude: s.username });
     if (bk.bienTapUsername) {
-      await notify(db, { username: bk.bienTapUsername, bookingId: id, kind: "redispatch", message: `Đơn ${bk.code} bạn tham gia vừa được điều chỉnh xe/tài xế`, exclude: s.username });
+      await notify(c, { username: bk.bienTapUsername, bookingId: id, kind: "redispatch", message: `Đơn ${bk.code} bạn tham gia vừa được điều chỉnh xe/tài xế`, exclude: s.username });
     }
     if (bk.quayPhimUsername) {
-      await notify(db, { username: bk.quayPhimUsername, bookingId: id, kind: "redispatch", message: `Đơn ${bk.code} bạn tham gia vừa được điều chỉnh xe/tài xế`, exclude: s.username });
+      await notify(c, { username: bk.quayPhimUsername, bookingId: id, kind: "redispatch", message: `Đơn ${bk.code} bạn tham gia vừa được điều chỉnh xe/tài xế`, exclude: s.username });
     }
   }
 
@@ -599,6 +618,12 @@ booking.post("/don/:id/cancel", async (c) => {
   if (!bk || bk.deletedAt) return c.notFound();
   if (!canCancelBooking(s, bk)) return c.text("Không có quyền hủy đơn ở trạng thái này.", 403);
   await db.update(bookings).set({ status: STATUS.HUY, updatedAt: new Date(), updatedBy: s.username }).where(eq(bookings.id, id));
+
+  if (bk.status === STATUS.DA_DIEU_XE) {
+    const [d] = await db.select().from(bookingDispatch).where(and(eq(bookingDispatch.bookingId, id), isNull(bookingDispatch.deletedAt))).limit(1);
+    if (d) await notify(c, { username: d.driverUsername, bookingId: id, kind: "cancelled", message: `Chuyến ${bk.code} đã bị hủy`, exclude: s.username });
+  }
+  await notify(c, { username: bk.requesterUsername, bookingId: id, kind: "cancelled", message: `Đơn ${bk.code} của bạn đã bị hủy`, exclude: s.username });
   return c.redirect(`/don/${id}`);
 });
 
@@ -736,10 +761,18 @@ booking.post("/don/:id/sua", async (c) => {
   }
 
   if (bienTapUsername && bienTapUsername !== bk.bienTapUsername) {
-    await notify(db, { username: bienTapUsername, bookingId: id, kind: "tagged", message: `Bạn được gắn thẻ Biên tập cho đơn ${bk.code}`, exclude: s.username });
+    await notify(c, { username: bienTapUsername, bookingId: id, kind: "tagged", message: `Bạn được gắn thẻ Biên tập cho đơn ${bk.code}`, exclude: s.username });
   }
   if (quayPhimUsername && quayPhimUsername !== bk.quayPhimUsername) {
-    await notify(db, { username: quayPhimUsername, bookingId: id, kind: "tagged", message: `Bạn được gắn thẻ Quay phim cho đơn ${bk.code}`, exclude: s.username });
+    await notify(c, { username: quayPhimUsername, bookingId: id, kind: "tagged", message: `Bạn được gắn thẻ Quay phim cho đơn ${bk.code}`, exclude: s.username });
+  }
+
+  if (resetStatus === STATUS.CHO_BAN_DUYET) {
+    const approvers = await listApprovers(db, bk.donViYeuCau);
+    await notifyMany(c, { usernames: approvers, bookingId: id, kind: "cho_duyet", message: `Đơn ${bk.code} (${patch.diemDen}) vừa gửi lại, đang chờ Ban duyệt`, exclude: s.username });
+  } else if (resetStatus === STATUS.CHO_DOI_XE) {
+    const doiXe = await listDoiXeUsers(db);
+    await notifyMany(c, { usernames: doiXe, bookingId: id, kind: "cho_dieu_xe", message: `Đơn ${bk.code} (${patch.diemDen}) vừa gửi lại, đang chờ điều xe`, exclude: s.username });
   }
   return c.redirect(`/don/${id}`);
 });

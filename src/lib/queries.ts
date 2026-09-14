@@ -157,6 +157,24 @@ export async function getBadges(db: DB, s: Session): Promise<Badges> {
   return { duyet, dieuXe, chuyenLaiXe, chuyenChuaDong, donCuaToi, thongBaoChuaDoc };
 }
 
+/** Trưởng/Phó ban của 1 đơn vị — nhận thông báo khi có đơn mới chờ duyệt. */
+export async function listApprovers(db: DB, donVi: string): Promise<string[]> {
+  const rows = await db
+    .select({ username: users.username })
+    .from(users)
+    .where(and(isNull(users.deletedAt), eq(users.isActive, true), eq(users.dsBan, donVi), inArray(users.role, ["truong_ban", "pho_ban"])));
+  return rows.map((r) => r.username);
+}
+
+/** Tổ trưởng/Tổ phó Đội xe — nhận thông báo khi có đơn mới chờ điều xe. */
+export async function listDoiXeUsers(db: DB): Promise<string[]> {
+  const rows = await db
+    .select({ username: users.username })
+    .from(users)
+    .where(and(isNull(users.deletedAt), eq(users.isActive, true), inArray(users.role, ["to_truong", "to_pho"])));
+  return rows.map((r) => r.username);
+}
+
 export const effectiveEnd = (start: Date, end: Date | null) =>
   end ?? new Date(start.getTime() + DEFAULT_DURATION_MS);
 

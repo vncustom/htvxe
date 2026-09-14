@@ -5,6 +5,9 @@ export type Bindings = {
   ASSETS: Fetcher;
   HTV_SSO_SERVER_URL?: string;
   HTV_SSO_SECRET?: string;
+  VAPID_SUBJECT?: string;
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
 };
 
 export type Session = {

@@ -178,9 +178,12 @@ export const Layout: FC<
                   {s.dsBan ? ` · ${s.dsBan}` : ""}
                 </span>
               </div>
-              <form method="post" action="/logout">
-                <button class="sec" style="padding:5px 12px">Đăng xuất</button>
-              </form>
+              <div style="display:flex;gap:8px;align-items:center">
+                <button id="push-toggle" class="sec" type="button" style="padding:5px 12px;font-size:12.5px;display:none"></button>
+                <form method="post" action="/logout">
+                  <button class="sec" style="padding:5px 12px">Đăng xuất</button>
+                </form>
+              </div>
             </header>
             {openTrips && openTrips.length > 0 ? (
               <div class="banner no-print">
@@ -200,6 +203,7 @@ export const Layout: FC<
           </div>
         </div>
         <script src="/mention.js" defer></script>
+        <script src="/push.js" defer></script>
       </body>
     </html>
   );

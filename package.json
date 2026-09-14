@@ -11,6 +11,7 @@
     "seed": "tsx scripts/seed.ts"
   },
   "dependencies": {
+    "@block65/webcrypto-web-push": "^2.0.0",
     "drizzle-orm": "^0.44.5",
     "hono": "^4.9.10",
     "postgres": "^3.4.7"

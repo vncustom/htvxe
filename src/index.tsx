@@ -10,6 +10,7 @@ import { queues } from "./routes/queues";
 import { trips } from "./routes/trips";
 import { extra } from "./routes/extra";
 import { admin } from "./routes/admin";
+import { push } from "./routes/push";
 
 const app = new Hono<Env>();
 
@@ -54,6 +55,7 @@ app.route("/", queues);
 app.route("/", trips);
 app.route("/", extra);
 app.route("/", admin);
+app.route("/", push);
 
 app.onError((err, c) => {
   console.error(err);

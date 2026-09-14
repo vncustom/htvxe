@@ -195,6 +195,20 @@ export const notifications = pgTable(
   (t) => [index("notif_username_idx").on(t.username, t.readAt)],
 );
 
+export const pushSubscriptions = pgTable(
+  "push_subscriptions",
+  {
+    id: uuid("id").defaultRandom().primaryKey(),
+    username: text("username").notNull(),
+    endpoint: text("endpoint").notNull().unique(),
+    p256dh: text("p256dh").notNull(),
+    auth: text("auth").notNull(),
+    userAgent: text("user_agent"),
+    createdAt: timestamp("created_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+    lastUsedAt: timestamp("last_used_at", { withTimezone: true, mode: "date" }).notNull().defaultNow(),
+  },
+  (t) => [index("push_sub_username_idx").on(t.username)],
+);
 
 export type User = typeof users.$inferSelect;
 export type Vehicle = typeof vehicles.$inferSelect;
