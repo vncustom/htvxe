@@ -8,6 +8,7 @@ import { isBanLeader, isDoiXe } from "../lib/rbac";
 import { STATUS } from "../lib/status";
 import { Layout, vi } from "../lib/ui";
 import { fmtDateTime } from "../lib/tz";
+import { vehicleGroupLabel } from "../lib/vehicleGroups";
 
 export const queues = new Hono<Env>();
 
@@ -74,6 +75,27 @@ queues.get("/dieu-xe", async (c) => {
   return c.html(
     <Layout session={s} badges={badges} openTrips={openTrips} path="/dieu-xe" title="Điều xe">
       <h2>Điều xe</h2>
+      <div class="card">
+        <h3>Chờ điều xe ({rows.length})</h3>
+        {rows.length === 0 ? <p class="muted">Không có đơn chờ.</p> : (
+          <table>
+            <thead><tr><th>Mã</th><th>Thời gian</th><th>Hành trình</th><th>Nội dung</th><th>Số người</th><th>Loại xe cần</th><th></th></tr></thead>
+            <tbody>
+              {rows.map((r) => (
+                <tr>
+                  <td>{r.code}</td>
+                  <td>{fmtDateTime(r.startTime)}</td>
+                  <td>{r.diemXuatPhat} → {r.diemDen}</td>
+                  <td>{r.noiDung}</td>
+                  <td>{vi(r.soNguoi)}</td>
+                  <td>{vehicleGroupLabel(r.vehicleGroupYeuCau)}</td>
+                  <td><a class="btn" href={`/don/${r.id}`}>Điều xe</a></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
       {daDieu.length ? (
         <div class="card">
           <h3>Đã điều xe, chưa chạy ({daDieu.length})</h3>
@@ -114,24 +136,6 @@ queues.get("/dieu-xe", async (c) => {
           </table>
         </div>
       ) : null}
-      <h3>Chờ điều xe ({rows.length})</h3>
-      {rows.length === 0 ? <p class="muted">Không có đơn chờ.</p> : (
-        <table>
-          <thead><tr><th>Mã</th><th>Thời gian</th><th>Hành trình</th><th>Nội dung</th><th>Số người</th><th></th></tr></thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr>
-                <td>{r.code}</td>
-                <td>{fmtDateTime(r.startTime)}</td>
-                <td>{r.diemXuatPhat} → {r.diemDen}</td>
-                <td>{r.noiDung}</td>
-                <td>{vi(r.soNguoi)}</td>
-                <td><a class="btn" href={`/don/${r.id}`}>Điều xe</a></td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      )}
     </Layout>,
   );
 });

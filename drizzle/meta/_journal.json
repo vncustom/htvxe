@@ -15,6 +15,13 @@
       "when": 1788538833723,
       "tag": "0001_solid_skrulls",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1789384072945,
+      "tag": "0002_solid_famine",
+      "breakpoints": true
     }
   ]
 }

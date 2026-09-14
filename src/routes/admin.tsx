@@ -6,6 +6,7 @@ import { pageCtx } from "../lib/page";
 import { isAdmin, ROLE_LABEL } from "../lib/rbac";
 import { hashPassword } from "../lib/password";
 import { Layout, Alert } from "../lib/ui";
+import { VEHICLE_GROUPS, VEHICLE_GROUP_DEFAULT_SEATS, isVehicleGroup } from "../lib/vehicleGroups";
 
 export const admin = new Hono<Env>();
 
@@ -199,7 +200,20 @@ function VehicleForm(props: { mode: "moi" | "sua"; v?: typeof vehicles.$inferSel
         <div class="row">
           <div><label>Tên xe *</label><input name="name" value={v?.name} required /></div>
           <div><label>Biển số *</label><input name="plateNo" value={v?.plateNo} required /></div>
-          <div><label>Số chỗ *</label><input name="seats" type="number" min="1" value={v?.seats} required /></div>
+        </div>
+        <div class="row">
+          <div>
+            <label>Loại xe *</label>
+            <select name="vehicleGroup" required>
+              {VEHICLE_GROUPS.map((g) => (
+                <option value={g.value} selected={(v?.vehicleGroup ?? "5") === g.value}>{g.label}</option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label>Số chỗ</label>
+            <input name="seats" type="number" min="1" value={v?.seats} placeholder="Để trống sẽ lấy theo loại xe" />
+          </div>
         </div>
         <label>Ghi chú</label>
         <input name="note" value={v?.note ?? ""} />
@@ -237,9 +251,12 @@ admin.post("/quan-tri/xe/moi", async (c) => {
   const f = await c.req.formData();
   const name = String(f.get("name") ?? "").trim();
   const plateNo = String(f.get("plateNo") ?? "").trim();
-  const seats = Number(f.get("seats") ?? 0);
-  if (!name || !plateNo || !seats) return c.text("Thiếu tên, biển số hoặc số chỗ.", 400);
-  await db.insert(vehicles).values({ name, plateNo, seats, note: str(f.get("note")), updatedBy: s.username });
+  const vehicleGroup = String(f.get("vehicleGroup") ?? "");
+  if (!name || !plateNo) return c.text("Thiếu tên hoặc biển số.", 400);
+  if (!isVehicleGroup(vehicleGroup)) return c.text("Loại xe không hợp lệ.", 400);
+  const seatsRaw = Number(f.get("seats") ?? 0);
+  const seats = seatsRaw > 0 ? seatsRaw : VEHICLE_GROUP_DEFAULT_SEATS[vehicleGroup];
+  await db.insert(vehicles).values({ name, plateNo, seats, vehicleGroup, note: str(f.get("note")), updatedBy: s.username });
   return c.redirect("/quan-tri");
 });
 
@@ -262,12 +279,17 @@ admin.post("/quan-tri/xe/:id", async (c) => {
   const db = c.get("db");
   const id = c.req.param("id");
   const f = await c.req.formData();
+  const vehicleGroupRaw = String(f.get("vehicleGroup") ?? "");
+  const vehicleGroup = isVehicleGroup(vehicleGroupRaw) ? vehicleGroupRaw : undefined;
+  const seatsRaw = Number(f.get("seats") ?? 0);
+  const seats = seatsRaw > 0 ? seatsRaw : vehicleGroup ? VEHICLE_GROUP_DEFAULT_SEATS[vehicleGroup] : undefined;
   await db
     .update(vehicles)
     .set({
       name: String(f.get("name") ?? "").trim() || undefined,
       plateNo: String(f.get("plateNo") ?? "").trim() || undefined,
-      seats: Number(f.get("seats") ?? 0) || undefined,
+      vehicleGroup,
+      seats,
       note: str(f.get("note")),
       isActive: f.get("isActive") === "on",
       updatedAt: new Date(),

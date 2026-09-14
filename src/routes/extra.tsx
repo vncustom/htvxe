@@ -9,6 +9,7 @@ import { isAdmin, isDoiXe, isLanhDaoDai, roleLabel } from "../lib/rbac";
 import { findOdoGaps, type OdoTripRow } from "../lib/odometer";
 import { Layout, vi } from "../lib/ui";
 import { fmtDateTime, instantFromVN, vnParts } from "../lib/tz";
+import { vehicleGroupLabel } from "../lib/vehicleGroups";
 
 export const extra = new Hono<Env>();
 
@@ -555,11 +556,11 @@ extra.get("/quan-tri", async (c) => {
 
       <h3>Xe ({vs.length}) — <a class="btn sec" style="font-size:13px;padding:4px 10px" href="/quan-tri/xe/moi">+ Thêm xe</a></h3>
       <table>
-        <thead><tr><th>Tên</th><th>Biển số</th><th>Chỗ</th><th>Số km</th><th>Hoạt động</th><th></th></tr></thead>
+        <thead><tr><th>Tên</th><th>Biển số</th><th>Loại xe</th><th>Chỗ</th><th>Số km</th><th>Hoạt động</th><th></th></tr></thead>
         <tbody>
           {vs.map((v) => (
             <tr>
-              <td>{v.name}</td><td>{v.plateNo}</td><td>{v.seats}</td><td>{vi(v.currentOdometer)}</td><td>{v.isActive ? "✓" : "—"}</td>
+              <td>{v.name}</td><td>{v.plateNo}</td><td>{vehicleGroupLabel(v.vehicleGroup)}</td><td>{v.seats}</td><td>{vi(v.currentOdometer)}</td><td>{v.isActive ? "✓" : "—"}</td>
               <td><a href={`/quan-tri/xe/${v.id}`}>Sửa</a></td>
             </tr>
           ))}

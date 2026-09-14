@@ -19,6 +19,7 @@ import { STATUS } from "../lib/status";
 import { canApproveFor, canCancelBooking, canEditBooking, isDoiXe, isVpDaiLeader } from "../lib/rbac";
 import { fromDatetimeLocal, fmtDateTime, toDatetimeLocal } from "../lib/tz";
 import { Layout, StatusPill, Alert, vi } from "../lib/ui";
+import { VEHICLE_GROUPS, isVehicleGroup, vehicleGroupLabel } from "../lib/vehicleGroups";
 
 export const booking = new Hono<Env>();
 
@@ -111,6 +112,13 @@ function CreateForm(props: { s: ReturnType<typeof must>; err?: string; v?: Recor
             <input name="soNguoi" type="number" min="1" value={v.soNguoi} />
           </div>
         </div>
+        <label>Loại xe cần</label>
+        <select name="vehicleGroupYeuCau">
+          <option value="">— Không yêu cầu cụ thể —</option>
+          {VEHICLE_GROUPS.map((g) => (
+            <option value={g.value} selected={v.vehicleGroupYeuCau === g.value}>{g.label}</option>
+          ))}
+        </select>
         <label>Đơn vị yêu cầu</label>
         <input name="donViYeuCau" value={v.donViYeuCau ?? props.s.dsBan ?? ""} />
         {canPhatSinh ? (
@@ -168,6 +176,8 @@ booking.post("/don", async (c) => {
 
   const soNguoiRaw = String(f.get("soNguoi") ?? "").trim();
   const soNguoi = soNguoiRaw ? Math.max(1, Math.trunc(Number(soNguoiRaw)) || 1) : null;
+  const vehicleGroupYeuCauRaw = str(f.get("vehicleGroupYeuCau"));
+  const vehicleGroupYeuCau = isVehicleGroup(vehicleGroupYeuCauRaw) ? vehicleGroupYeuCauRaw : null;
   const isPhatSinh = f.get("isPhatSinh") === "on" && (isDoiXe(s) || s.isDriver);
   const donVi = (str(f.get("donViYeuCau")) ?? s.dsBan ?? "").trim() || "(chưa rõ)";
   const code = await genBookingCode(db, startTime);
@@ -195,6 +205,7 @@ booking.post("/don", async (c) => {
       quayPhim,
       quayPhimUsername,
       soNguoi,
+      vehicleGroupYeuCau,
       isPhatSinh,
       status: isPhatSinh ? STATUS.CHO_DOI_XE : STATUS.CHO_BAN_DUYET,
       createdBy: s.username,
@@ -229,6 +240,10 @@ booking.get("/don/:id", async (c) => {
   let driverList: { username: string; fullName: string }[] = [];
   let vehList: typeof vehicles.$inferSelect[] = [];
   let busy: Awaited<ReturnType<typeof findBusyInWindow>> = [];
+  let availableVeh: typeof vehicles.$inferSelect[] = [];
+  let filteredVeh: typeof vehicles.$inferSelect[] = [];
+  const groupCounts = new Map<string, number>();
+  let selectedGroup: string = "tat_ca";
   if (showDispatch || showRedispatch) {
     driverList = await db
       .select({ username: users.username, fullName: users.fullName })
@@ -236,6 +251,20 @@ booking.get("/don/:id", async (c) => {
       .where(and(eq(users.isDriver, true), eq(users.isActive, true), isNull(users.deletedAt)));
     vehList = await db.select().from(vehicles).where(and(eq(vehicles.isActive, true), isNull(vehicles.deletedAt)));
     busy = await findBusyInWindow(db, bk.startTime, bk.endTime, bk.id);
+
+    // Chỉ hiện xe đang trống (không bận trong khung giờ này) để danh sách chọn gọn hơn.
+    const busyVehicleIds = new Set(busy.map((b) => b.vehicleId));
+    availableVeh = vehList.filter((v) => !busyVehicleIds.has(v.id));
+    for (const v of availableVeh) groupCounts.set(v.vehicleGroup, (groupCounts.get(v.vehicleGroup) ?? 0) + 1);
+
+    const nhomQuery = c.req.query("nhom");
+    if (nhomQuery === "tat_ca" || isVehicleGroup(nhomQuery)) {
+      selectedGroup = nhomQuery;
+    } else {
+      const currentVehGroup = showRedispatch ? vehList.find((v) => v.id === dispatch?.vehicleId)?.vehicleGroup : undefined;
+      selectedGroup = currentVehGroup ?? (isVehicleGroup(bk.vehicleGroupYeuCau) ? bk.vehicleGroupYeuCau : "tat_ca");
+    }
+    filteredVeh = selectedGroup === "tat_ca" ? availableVeh : availableVeh.filter((v) => v.vehicleGroup === selectedGroup);
   }
 
   const history = await db.select().from(auditLog).where(eq(auditLog.entityId, bk.id)).orderBy(desc(auditLog.atTime)).limit(50);
@@ -258,6 +287,7 @@ booking.get("/don/:id", async (c) => {
             {bk.bienTap ? <tr><th>Biên tập</th><td>{bk.bienTap}</td></tr> : null}
             {bk.quayPhim ? <tr><th>Quay phim</th><td>{bk.quayPhim}</td></tr> : null}
             {bk.soNguoi ? <tr><th>Số người</th><td>{bk.soNguoi}</td></tr> : null}
+            {bk.vehicleGroupYeuCau ? <tr><th>Loại xe cần</th><td>{vehicleGroupLabel(bk.vehicleGroupYeuCau)}</td></tr> : null}
           </tbody>
         </table>
         {canEditBooking(s, bk) ? (
@@ -333,7 +363,7 @@ booking.get("/don/:id", async (c) => {
       ) : null}
 
       {showDispatch || showRedispatch ? (
-        <div class="card no-print">
+        <div class="card no-print" id="dieu-xe">
           <h3>{showRedispatch ? "Điều chỉnh xe / lái xe" : "Điều xe"}</h3>
           {showRedispatch ? <p class="muted" style="margin-top:0">Tài xế chưa bắt đầu chuyến — có thể đổi xe/lái xe nếu cần. Người liên quan sẽ được báo.</p> : null}
           {busy.length ? (
@@ -346,18 +376,38 @@ booking.get("/don/:id", async (c) => {
               </ul>
             </div>
           ) : null}
+          <label style="margin-top:0">Lọc theo loại xe (chỉ xe đang trống)</label>
+          <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:4px">
+            {VEHICLE_GROUPS.map((g) => (
+              <a
+                class={"btn" + (selectedGroup === g.value ? "" : " sec")}
+                style="padding:6px 12px;font-size:13px"
+                href={`/don/${bk.id}?nhom=${g.value}#dieu-xe`}
+              >
+                {g.label} ({groupCounts.get(g.value) ?? 0})
+              </a>
+            ))}
+            <a
+              class={"btn" + (selectedGroup === "tat_ca" ? "" : " sec")}
+              style="padding:6px 12px;font-size:13px"
+              href={`/don/${bk.id}?nhom=tat_ca#dieu-xe`}
+            >
+              Tất cả ({availableVeh.length})
+            </a>
+          </div>
           <form method="post" action={showRedispatch ? `/don/${bk.id}/dieu-chinh-dieu-xe` : `/don/${bk.id}/dispatch`}>
             <div class="row">
               <div>
                 <label>Xe</label>
                 <select name="vehicleId" required>
                   <option value="">— chọn xe —</option>
-                  {vehList.map((v) => (
+                  {filteredVeh.map((v) => (
                     <option value={v.id} selected={showRedispatch && dispatch?.vehicleId === v.id}>
                       {v.name} ({v.plateNo}) · {v.seats} chỗ
                     </option>
                   ))}
                 </select>
+                {filteredVeh.length === 0 ? <p class="muted" style="margin-top:6px">Không có xe trống ở nhóm này — thử chọn nhóm khác.</p> : null}
               </div>
               <div>
                 <label>Lái xe</label>
@@ -583,6 +633,13 @@ booking.get("/don/:id/sua", async (c) => {
             <MentionField label="Quay phim" name="quayPhim" value={bk.quayPhim} hiddenName="quayPhimUsername" hiddenValue={bk.quayPhimUsername} />
             <div><label>Số người</label><input type="number" min="1" name="soNguoi" value={bk.soNguoi ?? ""} /></div>
           </div>
+          <label>Loại xe cần</label>
+          <select name="vehicleGroupYeuCau">
+            <option value="">— Không yêu cầu cụ thể —</option>
+            {VEHICLE_GROUPS.map((g) => (
+              <option value={g.value} selected={bk.vehicleGroupYeuCau === g.value}>{g.label}</option>
+            ))}
+          </select>
           <div style="margin-top:14px"><button>{isResubmit ? "Lưu & gửi lại" : "Lưu"}</button> <a class="btn sec" href={`/don/${bk.id}`}>Thoát</a></div>
         </form>
       </div>
@@ -614,6 +671,7 @@ booking.post("/don/:id/sua", async (c) => {
   if (bk.status === STATUS.BAN_TU_CHOI) resetStatus = STATUS.CHO_BAN_DUYET;
   else if (bk.status === STATUS.DOI_XE_TU_CHOI) resetStatus = STATUS.CHO_DOI_XE;
 
+  const vehicleGroupYeuCauRaw = str(f.get("vehicleGroupYeuCau"));
   const patch = {
     startTime,
     endTime: endRaw ? fromDatetimeLocal(endRaw) : null,
@@ -623,6 +681,7 @@ booking.post("/don/:id/sua", async (c) => {
     bienTap: str(f.get("bienTap")),
     quayPhim: str(f.get("quayPhim")),
     soNguoi: intOrNull(f.get("soNguoi")),
+    vehicleGroupYeuCau: isVehicleGroup(vehicleGroupYeuCauRaw) ? vehicleGroupYeuCauRaw : null,
   };
 
   await db
@@ -653,6 +712,7 @@ booking.post("/don/:id/sua", async (c) => {
     bienTap: bk.bienTap,
     quayPhim: bk.quayPhim,
     soNguoi: bk.soNguoi,
+    vehicleGroupYeuCau: bk.vehicleGroupYeuCau,
   };
   const after = {
     startTime: fmtDateTime(patch.startTime),
@@ -663,6 +723,7 @@ booking.post("/don/:id/sua", async (c) => {
     bienTap: patch.bienTap,
     quayPhim: patch.quayPhim,
     soNguoi: patch.soNguoi,
+    vehicleGroupYeuCau: patch.vehicleGroupYeuCau,
   };
   if (JSON.stringify(before) !== JSON.stringify(after)) {
     await db.insert(auditLog).values({

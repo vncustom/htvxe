@@ -20,10 +20,10 @@ type SeedUser = {
 };
 
 const VEHICLES = [
-  { name: "Toyota Zace", plateNo: "50A-030.36", seats: 7 },
-  { name: "Toyota Corolla Altis", plateNo: "50M-006.30", seats: 5 },
-  { name: "Mitsubishi Triton", plateNo: "50A-031.91", seats: 5 },
-  { name: "Toyota Hiace", plateNo: "50A-031.67", seats: 16 },
+  { name: "Toyota Zace", plateNo: "50A-030.36", seats: 7, vehicleGroup: "7" },
+  { name: "Toyota Corolla Altis", plateNo: "50M-006.30", seats: 5, vehicleGroup: "5" },
+  { name: "Mitsubishi Triton", plateNo: "50A-031.91", seats: 5, vehicleGroup: "5" },
+  { name: "Toyota Hiace", plateNo: "50A-031.67", seats: 16, vehicleGroup: "16" },
 ];
 
 async function main() {
@@ -55,10 +55,10 @@ async function main() {
 
   for (const v of VEHICLES) {
     await sql`
-      insert into vehicles (name, plate_no, seats)
-      values (${v.name}, ${v.plateNo}, ${v.seats})
+      insert into vehicles (name, plate_no, seats, vehicle_group)
+      values (${v.name}, ${v.plateNo}, ${v.seats}, ${v.vehicleGroup})
       on conflict (plate_no) do update set
-        name = excluded.name, seats = excluded.seats, updated_at = now()
+        name = excluded.name, seats = excluded.seats, vehicle_group = excluded.vehicle_group, updated_at = now()
     `;
   }
 
