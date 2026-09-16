@@ -16,8 +16,12 @@
     "VAPID_SUBJECT": "mailto:admin@htv.org.vn"
   }
   // Secret cần đặt (Cloudflare dashboard → Settings → Variables, hoặc `wrangler secret put`):
-  //   DATABASE_URL       postgresql://...pooler.supabase.com:6543/postgres  (Transaction pooler)
-  //   AUTH_SECRET        chuỗi ngẫu nhiên dài
-  //   VAPID_PRIVATE_KEY  cặp với VAPID_PUBLIC_KEY ở trên — tạo bằng scripts/generate-vapid-keys.ts, ĐỪNG commit giá trị private key
+  //   DATABASE_URL         postgresql://...pooler.supabase.com:6543/postgres  (Transaction pooler)
+  //   AUTH_SECRET          chuỗi ngẫu nhiên dài
+  //   VAPID_PRIVATE_KEY    cặp với VAPID_PUBLIC_KEY ở trên — tạo bằng scripts/generate-vapid-keys.ts, ĐỪNG commit giá trị private key
+  //   GMAIL_CLIENT_ID      OAuth2 Client ID (Google Cloud Console)
+  //   GMAIL_CLIENT_SECRET  OAuth2 Client Secret
+  //   GMAIL_REFRESH_TOKEN  refresh token cấp quyền scope gmail.send cho tài khoản Gmail dùng gửi thông báo
+  //   GMAIL_SENDER         địa chỉ Gmail dùng để gửi (vd: yourname@gmail.com) — không đặt thì gửi từ "me"
   // Biến thường: APP_TZ=Asia/Ho_Chi_Minh
 }

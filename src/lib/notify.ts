@@ -4,9 +4,10 @@ import type { DB } from "../db/client";
 import type { Env } from "../env";
 import { notifications, users } from "../db/schema";
 import { sendPush } from "./push";
+import { sendGmail } from "./gmail";
 
-/** Ghi 1 thông báo cho `username` (bỏ qua nếu rỗng hoặc trùng người đang thao tác `exclude`)
- * và đẩy Web Push tới điện thoại/máy đã subscribe của họ (chạy nền, không chặn response). */
+/** Ghi 1 thông báo cho `username` (bỏ qua nếu rỗng hoặc trùng người đang thao tác `exclude`),
+ * đẩy Web Push tới điện thoại/máy đã subscribe và gửi email (nếu có) — cả hai chạy nền, không chặn response. */
 export async function notify(
   c: Context<Env>,
   args: { username: string | null | undefined; bookingId?: string; kind: string; message: string; exclude?: string },
@@ -15,9 +16,16 @@ export async function notify(
   if (!username || username === exclude) return;
   const db = c.get("db");
   await db.insert(notifications).values({ username, bookingId, kind, message });
-  c.executionCtx.waitUntil(
-    sendPush(c, username, { title: "Đặt xe HTV", body: message, url: bookingId ? `/don/${bookingId}` : "/thong-bao" }),
-  );
+  const path = bookingId ? `/don/${bookingId}` : "/thong-bao";
+  c.executionCtx.waitUntil(sendPush(c, username, { title: "Đặt xe HTV", body: message, url: path }));
+
+  const [u] = await db.select({ email: users.email }).from(users).where(eq(users.username, username)).limit(1);
+  if (u?.email) {
+    const link = `${new URL(c.req.url).origin}${path}`;
+    c.executionCtx.waitUntil(
+      sendGmail(c, { to: u.email, subject: "Đặt xe HTV — " + message, body: `${message}\n\nXem chi tiết: ${link}` }),
+    );
+  }
 }
 
 /** Gửi cùng 1 thông báo tới nhiều user (ví dụ mọi Trưởng/Phó ban của 1 đơn vị). */
