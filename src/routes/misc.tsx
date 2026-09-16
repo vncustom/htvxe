@@ -160,8 +160,8 @@ misc.get("/thong-bao", async (c) => {
   }
 
   return c.html(
-    <Layout session={s} badges={b} openTrips={openTrips} path="/thong-bao" title="Thông báo">
-      <h2>Thông báo</h2>
+    <Layout session={s} badges={b} openTrips={openTrips} path="/thong-bao" title="Nhật ký thông báo">
+      <h2>Nhật ký thông báo</h2>
       {mine.length > 0 ? (
         <>
           <h3 style="margin-top:0">Thông báo mới</h3>

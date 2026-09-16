@@ -132,7 +132,7 @@ export const Layout: FC<
     { href: "/thong-ke/toi", label: "Thống kê của tôi", show: s.isDriver },
     { href: "/cong-to-met", label: "Công-tơ-mét", show: isDoiXe(s) || isAdmin(s) },
     { href: "/thong-ke", label: "Thống kê", show: isDoiXe(s) || isAdmin(s) || isLanhDaoDai(s) },
-    { href: "/thong-bao", label: "Thông báo", show: true, badge: b.thongBaoChuaDoc },
+    { href: "/thong-bao", label: "Nhật ký thông báo", show: true, badge: b.thongBaoChuaDoc },
     { href: "/quan-tri", label: "Quản trị", show: isAdmin(s) },
   ];
   return (
