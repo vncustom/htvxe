@@ -13,6 +13,7 @@ export async function sendPush(c: Context<Env>, username: string, payload: PushP
   if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY) return;
   const db = c.get("db");
   const subs = await db.select().from(pushSubscriptions).where(eq(pushSubscriptions.username, username));
+  console.log("sendPush: tìm thấy", subs.length, "subscription cho", username);
   if (!subs.length) return;
 
   const vapid = { subject: VAPID_SUBJECT || "mailto:admin@example.com", publicKey: VAPID_PUBLIC_KEY, privateKey: VAPID_PRIVATE_KEY };
@@ -30,6 +31,8 @@ export async function sendPush(c: Context<Env>, username: string, payload: PushP
         const res = await fetch(sub.endpoint, req);
         if (res.status === 404 || res.status === 410) {
           await db.delete(pushSubscriptions).where(eq(pushSubscriptions.id, sub.id));
+        } else if (!res.ok) {
+          console.error("Gửi web push lỗi", sub.endpoint, res.status, await res.text());
         }
       } catch (err) {
         console.error("Gửi web push lỗi", sub.endpoint, err);

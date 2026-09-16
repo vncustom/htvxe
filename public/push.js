@@ -58,11 +58,17 @@
         userVisibleOnly: true,
         applicationServerKey: urlBase64ToUint8Array(publicKey),
       });
-      await fetch("/api/push/subscribe", {
+      const res = await fetch("/api/push/subscribe", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(sub.toJSON()),
       });
+      if (!res.ok) {
+        await sub.unsubscribe();
+        alert("Không lưu được đăng ký thông báo trên máy chủ. Thử lại sau.");
+        setButtonState(btn, "off");
+        return;
+      }
       setButtonState(btn, "on");
     });
   }

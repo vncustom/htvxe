@@ -12,16 +12,19 @@
   "vars": {
     // Không bí mật — trình duyệt cần đọc để subscribe Web Push. Tạo bằng:
     //   npx tsx scripts/generate-vapid-keys.ts
-    "VAPID_PUBLIC_KEY": "BLo-VTEsTNw9yieHz3pH07xWuWG6tuozVxd-a_AgDSdC9IgeMiDgWfviS5Fo6HmLRoVGNAHhc1pbjUcW_-0iFcA",
-    "VAPID_SUBJECT": "mailto:admin@htv.org.vn"
+    "VAPID_PUBLIC_KEY": "BD0koVT_o3pf7W1O90CuMdO1AiyBcmRFt57gv2cjvFjSGvcdwAcTdq42PHELApPFlTnFZ1lQHsFoPTmcx08JSWo",
+    "VAPID_SUBJECT": "mailto:admin@htv.org.vn",
+    // Không bí mật — Client ID OAuth2 và địa chỉ Gmail dùng gửi thông báo.
+    "GMAIL_CLIENT_ID": "614594852515-o4h36kkpguv2m5lgnjvc7betaevd7o66.apps.googleusercontent.com",
+    "GMAIL_SENDER": "haleberry506@gmail.com"
   }
   // Secret cần đặt (Cloudflare dashboard → Settings → Variables, hoặc `wrangler secret put`):
   //   DATABASE_URL         postgresql://...pooler.supabase.com:6543/postgres  (Transaction pooler)
   //   AUTH_SECRET          chuỗi ngẫu nhiên dài
   //   VAPID_PRIVATE_KEY    cặp với VAPID_PUBLIC_KEY ở trên — tạo bằng scripts/generate-vapid-keys.ts, ĐỪNG commit giá trị private key
-  //   GMAIL_CLIENT_ID      OAuth2 Client ID (Google Cloud Console)
   //   GMAIL_CLIENT_SECRET  OAuth2 Client Secret
   //   GMAIL_REFRESH_TOKEN  refresh token cấp quyền scope gmail.send cho tài khoản Gmail dùng gửi thông báo
-  //   GMAIL_SENDER         địa chỉ Gmail dùng để gửi (vd: yourname@gmail.com) — không đặt thì gửi từ "me"
+  // GMAIL_CLIENT_ID và GMAIL_SENDER không bí mật nên khai báo thẳng trong "vars" ở trên,
+  // KHÔNG đặt qua Dashboard nữa — đặt qua Dashboard mà không khai báo ở đây sẽ bị xoá ở lần deploy sau.
   // Biến thường: APP_TZ=Asia/Ho_Chi_Minh
 }

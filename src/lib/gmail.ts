@@ -71,6 +71,7 @@ export async function sendGmail(
       body: JSON.stringify({ raw: toBase64Url(raw) }),
     });
     if (!res.ok) console.error("Gửi Gmail lỗi", res.status, await res.text());
+    else console.log("Đã gửi Gmail tới", to);
   } catch (err) {
     console.error("Gửi Gmail lỗi", to, err);
   }
