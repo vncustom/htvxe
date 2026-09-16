@@ -1,8 +1,8 @@
 import { Hono } from "hono";
-import { and, asc, eq, gte, isNull, lte } from "drizzle-orm";
+import { and, asc, eq, gte, isNull, lte, sql } from "drizzle-orm";
 import type { Env } from "../env";
 import type { DB } from "../db/client";
-import { alertAcks, bookingDispatch, bookings, tripLogs, users, vehicles } from "../db/schema";
+import { alertAcks, bookingDispatch, bookings, pushSubscriptions, tripLogs, users, vehicles } from "../db/schema";
 import { pageCtx } from "../lib/page";
 import { must } from "../lib/session";
 import { isAdmin, isDoiXe, isLanhDaoDai, roleLabel } from "../lib/rbac";
@@ -532,6 +532,12 @@ extra.get("/quan-tri", async (c) => {
   const us = await db.select().from(users).where(isNull(users.deletedAt)).orderBy(asc(users.username)).limit(1000);
   const vs = await db.select().from(vehicles).where(isNull(vehicles.deletedAt)).orderBy(asc(vehicles.name));
 
+  const pushCounts = await db
+    .select({ username: pushSubscriptions.username, count: sql<number>`count(*)`.mapWith(Number) })
+    .from(pushSubscriptions)
+    .groupBy(pushSubscriptions.username);
+  const pushMap = new Map(pushCounts.map((p) => [p.username, p.count]));
+
   const dupNames = us.filter((u) => u.fullName.trim().toLowerCase() === u.username.trim().toLowerCase());
   const banSet = new Map<string, { td: number; pd: number }>();
   for (const u of us) {
@@ -569,15 +575,19 @@ extra.get("/quan-tri", async (c) => {
 
       <h3>Người dùng ({us.length}) — <a class="btn sec" style="font-size:13px;padding:4px 10px" href="/quan-tri/user/moi">+ Thêm user</a></h3>
       <table>
-        <thead><tr><th>Username</th><th>Họ tên</th><th>Vai trò</th><th>Đơn vị</th><th>Lái xe</th><th>Hoạt động</th><th></th></tr></thead>
+        <thead><tr><th>Username</th><th>Họ tên</th><th>Vai trò</th><th>Đơn vị</th><th>Lái xe</th><th>Hoạt động</th><th>Thông báo</th><th></th></tr></thead>
         <tbody>
-          {us.slice(0, 500).map((u) => (
-            <tr>
-              <td>{u.username}</td><td>{u.fullName}</td><td>{roleLabel(u.role)}</td><td>{u.dsBan ?? ""}</td>
-              <td>{u.isDriver ? "✓" : ""}</td><td>{u.isActive ? "✓" : "—"}</td>
-              <td><a href={`/quan-tri/user/${u.username}`}>Sửa</a></td>
-            </tr>
-          ))}
+          {us.slice(0, 500).map((u) => {
+            const n = pushMap.get(u.username) ?? 0;
+            return (
+              <tr>
+                <td>{u.username}</td><td>{u.fullName}</td><td>{roleLabel(u.role)}</td><td>{u.dsBan ?? ""}</td>
+                <td>{u.isDriver ? "✓" : ""}</td><td>{u.isActive ? "✓" : "—"}</td>
+                <td>{n > 0 ? `🔔 ${n} thiết bị` : "—"}</td>
+                <td><a href={`/quan-tri/user/${u.username}`}>Sửa</a></td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
     </Layout>,
