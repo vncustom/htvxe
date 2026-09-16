@@ -276,6 +276,7 @@ booking.get("/don/:id", async (c) => {
   }
 
   const history = await db.select().from(auditLog).where(eq(auditLog.entityId, bk.id)).orderBy(desc(auditLog.atTime)).limit(50);
+  const loi = c.req.query("loi") || null;
 
   return c.html(
     <Layout session={s} badges={badges} openTrips={openTrips} path="" title={bk.code}>
@@ -373,6 +374,7 @@ booking.get("/don/:id", async (c) => {
       {showDispatch || showRedispatch ? (
         <div class="card no-print" id="dieu-xe">
           <h3>{showRedispatch ? "Điều chỉnh xe / lái xe" : "Điều xe"}</h3>
+          <Alert msg={loi} />
           {showRedispatch ? <p class="muted" style="margin-top:0">Tài xế chưa bắt đầu chuyến — có thể đổi xe/lái xe nếu cần. Người liên quan sẽ được báo.</p> : null}
           {busy.length ? (
             <div class="warn">
@@ -512,7 +514,7 @@ booking.post("/don/:id/dispatch", async (c) => {
   const f = await c.req.formData();
   const [bk] = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
   if (!bk || bk.deletedAt) return c.notFound();
-  if (bk.status !== STATUS.CHO_DOI_XE) return c.text("Đơn không còn chờ Đội xe.", 409);
+  if (bk.status !== STATUS.CHO_DOI_XE) return c.redirect(`/don/${id}?loi=${encodeURIComponent("Đơn không còn chờ Đội xe.")}`);
 
   if (String(f.get("decision") ?? "dieu") === "tu_choi") {
     await db.update(bookings).set({ status: STATUS.DOI_XE_TU_CHOI, updatedAt: new Date(), updatedBy: s.username }).where(eq(bookings.id, id));
@@ -521,12 +523,13 @@ booking.post("/don/:id/dispatch", async (c) => {
   }
   const vehicleId = String(f.get("vehicleId") ?? "");
   const driverUsername = String(f.get("driverUsername") ?? "");
-  if (!vehicleId || !driverUsername) return c.text("Chọn xe và lái xe.", 400);
+  if (!vehicleId || !driverUsername) return c.redirect(`/don/${id}?loi=${encodeURIComponent("Chọn xe và lái xe.")}#dieu-xe`);
 
   const busy = await findBusyInWindow(db, bk.startTime, bk.endTime, bk.id);
   const conflict = busy.find((b) => b.vehicleId === vehicleId || b.driverUsername === driverUsername);
   if (conflict) {
-    return c.text(`Xe hoặc lái xe đang bận trong khung giờ này (đơn ${conflict.code}, ${fmtDateTime(conflict.startTime)}). Chọn xe/lái xe khác.`, 409);
+    const msg = `Xe hoặc lái xe đang bận trong khung giờ này (đơn ${conflict.code}, ${fmtDateTime(conflict.startTime)}). Chọn xe/lái xe khác.`;
+    return c.redirect(`/don/${id}?loi=${encodeURIComponent(msg)}#dieu-xe`);
   }
 
   await db
@@ -552,14 +555,16 @@ booking.post("/don/:id/dieu-chinh-dieu-xe", async (c) => {
   const f = await c.req.formData();
   const [bk] = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
   if (!bk || bk.deletedAt) return c.notFound();
-  if (bk.status !== STATUS.DA_DIEU_XE) return c.text("Chỉ điều chỉnh được đơn đã điều xe mà tài xế chưa bắt đầu chuyến.", 409);
+  if (bk.status !== STATUS.DA_DIEU_XE) {
+    return c.redirect(`/don/${id}?loi=${encodeURIComponent("Chỉ điều chỉnh được đơn đã điều xe mà tài xế chưa bắt đầu chuyến.")}`);
+  }
 
   const [oldDispatch] = await db.select().from(bookingDispatch).where(eq(bookingDispatch.bookingId, id)).limit(1);
   if (!oldDispatch) return c.notFound();
 
   const vehicleId = String(f.get("vehicleId") ?? "");
   const driverUsername = String(f.get("driverUsername") ?? "");
-  if (!vehicleId || !driverUsername) return c.text("Chọn xe và lái xe.", 400);
+  if (!vehicleId || !driverUsername) return c.redirect(`/don/${id}?loi=${encodeURIComponent("Chọn xe và lái xe.")}#dieu-xe`);
   const ghiChuDoiXe = str(f.get("ghiChuDoiXe"));
 
   const changed = vehicleId !== oldDispatch.vehicleId || driverUsername !== oldDispatch.driverUsername;
@@ -567,7 +572,8 @@ booking.post("/don/:id/dieu-chinh-dieu-xe", async (c) => {
     const busy = await findBusyInWindow(db, bk.startTime, bk.endTime, bk.id);
     const conflict = busy.find((b) => b.vehicleId === vehicleId || b.driverUsername === driverUsername);
     if (conflict) {
-      return c.text(`Xe hoặc lái xe đang bận trong khung giờ này (đơn ${conflict.code}, ${fmtDateTime(conflict.startTime)}). Chọn xe/lái xe khác.`, 409);
+      const msg = `Xe hoặc lái xe đang bận trong khung giờ này (đơn ${conflict.code}, ${fmtDateTime(conflict.startTime)}). Chọn xe/lái xe khác.`;
+      return c.redirect(`/don/${id}?loi=${encodeURIComponent(msg)}#dieu-xe`);
     }
 
     await db
