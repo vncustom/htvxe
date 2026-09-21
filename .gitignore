@@ -5,3 +5,16 @@ dist/
 *.log
 # dữ liệu seed chứa thông tin cá nhân
 scripts/users.json
+# app Android: KHÔNG commit keystore/mật khẩu ký, file build
+android/*.keystore
+android/*.jks
+android/*.apk
+android/*.aab
+android/*.idsig
+android/app/
+android/build/
+android/.gradle/
+android/gradle/
+android/gradlew*
+android/*.gradle
+android/local.properties

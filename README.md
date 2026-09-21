@@ -13,6 +13,7 @@ Tài liệu chi tiết trong [`docs/`](docs/):
 | [`docs/ke-hoach.md`](docs/ke-hoach.md) | Quyết định kiến trúc, vai trò, trạng thái đơn, mô hình dữ liệu |
 | [`docs/nghiem-thu.md`](docs/nghiem-thu.md) | Danh sách nghiệm thu (checklist) |
 | [`docs/dong-bo.md`](docs/dong-bo.md) | Vì sao **không còn** tầng đồng bộ |
+| [`docs/app-android.md`](docs/app-android.md) | App Android (TWA bọc web) — build APK, xác minh domain, phát hành |
 
 ## Stack
 
