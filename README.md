@@ -11,7 +11,9 @@ Tài liệu chi tiết trong [`docs/`](docs/):
 | [`docs/trien-khai.md`](docs/trien-khai.md) | Dựng từ đầu & deploy — **không cần máy local** (Supabase SQL Editor + GitHub → Cloudflare tự build) |
 | [`docs/van-hanh.md`](docs/van-hanh.md) | Vận hành hằng ngày: thêm/sửa user, sao lưu, reset dữ liệu, đổi lược đồ |
 | [`docs/ke-hoach.md`](docs/ke-hoach.md) | Quyết định kiến trúc, vai trò, trạng thái đơn, mô hình dữ liệu |
+| [`docs/system_architecture.md`](docs/system_architecture.md) | Kiến trúc kỹ thuật: vòng đời request, bản đồ module, sơ đồ dữ liệu, ghi chú hiệu năng |
 | [`docs/nghiem-thu.md`](docs/nghiem-thu.md) | Danh sách nghiệm thu (checklist) |
+| [`docs/kiem-tra-app.md`](docs/kiem-tra-app.md) | Cách kiểm tra app còn chạy đúng không — **dành cho người không biết code** |
 | [`docs/dong-bo.md`](docs/dong-bo.md) | Vì sao **không còn** tầng đồng bộ |
 | [`docs/app-android.md`](docs/app-android.md) | App Android (TWA bọc web) — build APK, xác minh domain, phát hành |
 
@@ -79,9 +81,14 @@ Từ đó mỗi `git push` lên `main` → Cloudflare tự build & deploy. Xem �
 npm install
 cp .dev.vars.example .dev.vars      # điền DATABASE_URL + AUTH_SECRET
 npm run typecheck                   # tsc --noEmit
+npm test                            # unit + integration test (không cần DB thật, xem test/)
 npm run dev                         # wrangler dev — http://localhost:8787
 npm run deploy                      # đẩy thẳng lên Cloudflare (không qua GitHub)
 ```
+
+Test chạy bằng **Vitest**; test tích hợp (`test/integration/`) dựng 1 Postgres thật
+(qua **PGlite**, biên dịch sang WASM, chạy trong bộ nhớ) và áp đúng các file SQL trong
+`drizzle/`, nên không cần Docker/DATABASE_URL. Chi tiết: [`test/README.md`](test/README.md).
 
 `npm run db:push` / `npm run db:generate` (drizzle-kit) và `npm run seed` chỉ cần khi
 đổi `src/db/schema.ts` hoặc muốn seed bằng `scripts/users.json`; đặt `DATABASE_URL`
