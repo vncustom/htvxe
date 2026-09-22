@@ -64,15 +64,17 @@ theo vai (chờ duyệt + chờ điều xe + chuyến được phân + chuyến 
 
 ## Mô hình dữ liệu
 
-Nguồn sự thật: `src/db/schema.ts`. 9 bảng:
+Nguồn sự thật: `src/db/schema.ts`. 11 bảng:
 
 `users`, `vehicles`, `bookings` (lõi), `booking_approvals` (Ban ghi),
 `booking_dispatch` (Đội xe ghi), `trip_logs` (lái xe ghi), `odometer_events`,
-`audit_log` (chỉnh sửa sau khi khoá số liệu), `alert_acks` ("Biết rồi" cho cảnh báo km).
+`audit_log` (chỉnh sửa sau khi khoá số liệu), `alert_acks` ("Biết rồi" cho cảnh báo km),
+`notifications` (thông báo trong app), `push_subscriptions` (thiết bị đã bật Web Push).
 
 Quan hệ tới user tham chiếu theo `username` (không FK). Xoá = tắt cờ (`isActive` /
-`deletedAt`), **không xoá cứng** để giữ lịch sử đơn. `drizzle/0000_init.sql` là bản SQL
-tạo bảng dùng khi dựng qua Supabase SQL Editor.
+`deletedAt`), **không xoá cứng** để giữ lịch sử đơn. Các file SQL trong `drizzle/`
+(`0000_init.sql`, `0001_...`, ...) là bản SQL tạo/đổi bảng dùng khi dựng qua Supabase SQL
+Editor — **phải chạy đủ tất cả, theo thứ tự**, không chỉ file đầu tiên.
 
 ## Lịch sử phát triển
 
@@ -85,7 +87,7 @@ tạo bảng dùng khi dựng qua Supabase SQL Editor.
   (bỏ SQLite local + daemon đồng bộ). Bundle ~115 KiB gzip. Giữ nguyên nghiệp vụ bản 1.
   Thêm PWA manifest.
 - **Vòng cải thiện gần đây**:
-  - Dựng & deploy không cần máy local: `drizzle/0000_init.sql` + `scripts/seed.sql` +
+  - Dựng & deploy không cần máy local: các file trong `drizzle/` + `scripts/seed.sql` +
     `scripts/demo.sql` chạy qua Supabase SQL Editor; auto-deploy qua Workers Builds.
   - Giao diện làm lại: sidebar/logo Đài, card + bảng bo góc đổ bóng, avatar, focus ring.
   - Lịch tuần: chọn ngày để nhảy tuần, chú thích màu, đánh dấu "Hôm nay".
@@ -95,6 +97,12 @@ tạo bảng dùng khi dựng qua Supabase SQL Editor.
   - "Chuyến của tôi" hiện SĐT biên tập + lái xe.
   - "Thống kê của tôi" cho lái xe; thống kê mặc định trọn tháng.
   - "Đặt lại số km gốc của xe" giới hạn còn `admin` / `admin_datxe`.
+  - Hiệu năng: `loadBooking` gộp 9 query tuần tự thành 1 JOIN, bỏ query thừa trong
+    POST handler của `admin.tsx`, thêm index `bookings(requesterUsername)`, tách CSS ra
+    file tĩnh — chi tiết ở [`docs/system_architecture.md`](system_architecture.md#8-ghi-chú-hiệu-năng--đã-làm--chưa-làm).
+  - Bộ test tự động (Vitest + PGlite, không cần Docker/DB thật) — 66 test phủ rbac,
+    vòng đời đơn, tính giờ VN... xem [`docs/kiem-tra-app.md`](kiem-tra-app.md) (không
+    biết code) hoặc [`test/README.md`](../test/README.md) (kỹ thuật).
 
 ## Việc dữ liệu còn lại (`scripts/users.json` / `scripts/seed.sql`)
 

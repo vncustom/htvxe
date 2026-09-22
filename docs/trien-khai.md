@@ -11,7 +11,7 @@ Toàn bộ việc dựng có thể làm **hoàn toàn trên trình duyệt** —
 | Web | Hono + JSX server-render, chạy trên Cloudflare Workers |
 | DB | Drizzle ORM + postgres.js → Supabase (Transaction pooler, cổng 6543) |
 | Auth | JWT trong cookie (`hono/jwt`) + PBKDF2 (WebCrypto) |
-| Lược đồ | `src/db/schema.ts` (nguồn sự thật) → `drizzle/0000_init.sql` |
+| Lược đồ | `src/db/schema.ts` (nguồn sự thật) → các file SQL trong `drizzle/` |
 
 ## Ai kết nối với ai
 
@@ -49,9 +49,17 @@ Dashboard → **Connect** → **Connection string**, thay `[YOUR-PASSWORD]`:
 
 Supabase → **SQL Editor** → **New query**, chạy lần lượt:
 
-1. **Tạo 9 bảng**: dán toàn bộ [`drizzle/0000_init.sql`](../drizzle/0000_init.sql) → Run.
+1. **Tạo bảng**: mở thư mục [`drizzle/`](../drizzle), chạy **lần lượt từng file `.sql`
+   theo đúng thứ tự số ở đầu tên file** — `0000_init.sql` trước, rồi `0001_...sql`,
+   `0002_...sql`, cứ thế tới file số lớn nhất hiện có. Mỗi file: dán toàn bộ nội dung
+   vào SQL Editor → Run → xong mới sang file tiếp theo.
    (File có dấu `--> statement-breakpoint` của Drizzle; Postgres coi là comment, chạy
    thẳng được. Nếu báo lỗi thì Find & Replace chuỗi đó thành rỗng rồi Run lại.)
+   > **Chỉ chạy `0000_init.sql` là KHÔNG đủ** — các file sau đó thêm bảng
+   > `notifications`, `push_subscriptions` và vài cột mới cho `bookings`/`vehicles`
+   > mà app hiện tại cần có mới chạy được. Bỏ sót 1 file = app lỗi ngay khi dùng tính
+   > năng liên quan (ví dụ thiếu bảng `notifications` → mọi thao tác tạo thông báo báo
+   > lỗi 500).
 2. **Nạp 367 user + 4 xe**: dán toàn bộ [`scripts/seed.sql`](../scripts/seed.sql) → Run.
    Mật khẩu mặc định `123456`, dạng upsert theo `username` / `plate_no` (chạy lại được).
 3. *(tuỳ chọn)* **Dữ liệu demo** để xem thử mọi luồng: dán [`scripts/demo.sql`](../scripts/demo.sql).

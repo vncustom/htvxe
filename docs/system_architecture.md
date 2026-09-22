@@ -33,12 +33,19 @@ Không có framework SPA, không build step phía client ngoài Wrangler bundle 
 
 ## 2. Vòng đời 1 request
 
-[`src/index.tsx`](../src/index.tsx) nối middleware theo thứ tự:
+[`src/index.tsx`](../src/index.tsx) export hàm `createApp(dbMw?)` — lắp middleware + toàn
+bộ route lên 1 app Hono, nhận **middleware kết nối DB rời** làm tham số (mặc định
+`dbMiddleware`, xem ngay dưới). Export mặc định của file (`createApp()`) là app thật
+chạy trên Cloudflare; test tích hợp gọi lại `createApp(testDbMw)` để tiêm DB giả (PGlite)
+mà không đụng route wiring — xem mục 9.
 
-1. **Mở kết nối DB** — `makeDb(c.env.DATABASE_URL)` tạo 1 client `postgres.js` mới
-   (`max: 1, prepare: false`) cho **riêng request này**, gắn vào `c.set("db", ...)`.
-   Đóng lại trong `finally` bằng `c.executionCtx.waitUntil(sql.end(...))` — không chặn
-   response, nhưng vẫn là round-trip TCP+TLS mới mỗi lần (xem mục 7, việc chưa làm).
+Thứ tự middleware:
+
+1. **`dbMiddleware`** (export riêng, `src/index.tsx`) — `makeDb(c.env.DATABASE_URL)` tạo
+   1 client `postgres.js` mới (`max: 1, prepare: false`) cho **riêng request này**, gắn
+   vào `c.set("db", ...)`. Đóng lại trong `finally` bằng
+   `c.executionCtx.waitUntil(sql.end(...))` — không chặn response, nhưng vẫn là
+   round-trip TCP+TLS mới mỗi lần (xem mục 8, việc chưa làm).
 2. **`sessionMiddleware`** — đọc cookie `htvxe_session`, verify JWT (`hono/jwt`, HS256,
    `AUTH_SECRET`), gắn `c.set("session", ...)`. Không đụng DB — session tự chứa đủ thông
    tin hiển thị (username, fullName, role, isDriver, dsBan).
@@ -62,7 +69,7 @@ script chỉ khi không khớp file tĩnh nào.
 |---|---|
 | `index.tsx` | Nối middleware + toàn bộ route con thành 1 app Hono |
 | `env.ts` | Kiểu `Bindings` (secrets/vars từ `wrangler.jsonc`), `Session`, `Variables` (`db`, `sql`, `session` trong context) |
-| `db/schema.ts` | **Nguồn sự thật** lược đồ Drizzle — 9 bảng, index, kiểu suy ra (`User`, `Vehicle`, `Booking`) |
+| `db/schema.ts` | **Nguồn sự thật** lược đồ Drizzle — 11 bảng, index, kiểu suy ra (`User`, `Vehicle`, `Booking`) |
 | `db/client.ts` | `makeDb(url)` — tạo `postgres.js` client + `drizzle()` cho 1 request |
 | `lib/session.ts` | Ký/verify JWT cookie, `must(c)` (bắt buộc có session), `requireAuth` middleware |
 | `lib/rbac.ts` | Toàn bộ luật phân quyền dạng hàm thuần (`isAdmin`, `isDoiXe`, `canApproveFor`, `canCancelBooking`, `canEditBooking`...) — không có logic quyền nào nằm rải trong route |
@@ -82,7 +89,7 @@ script chỉ khi không khớp file tĩnh nào.
 
 ## 4. Mô hình dữ liệu
 
-9 bảng trong `db/schema.ts`, không dùng foreign key tới `users`/`vehicles` — tham chiếu
+11 bảng trong `db/schema.ts`, không dùng foreign key tới `users`/`vehicles` — tham chiếu
 qua `username`/`id` dạng text/uuid trần, kiểm tra ở tầng ứng dụng. Lý do: cho phép soft-
 delete user/xe (`isActive` / `deletedAt`) mà không phá lịch sử đơn cũ.
 
@@ -166,3 +173,13 @@ Chưa làm, cân nhắc khi cần:
   bắt tay TCP+TLS mà không đổi code Drizzle/postgres.js.
 - `odometer_events` hiện chỉ ghi, chưa có truy vấn đọc lại — cân nhắc dùng thật cho cảnh
   báo km ngoài đơn (đang suy ra từ `trip_logs`) hoặc bỏ ghi nếu không cần.
+
+## 9. Kiểm thử
+
+Vitest (Node thuần, không cần `workerd`) + PGlite (Postgres thật biên dịch WASM, chạy
+trong RAM — không cần Docker/`DATABASE_URL`) cho test tích hợp, áp thẳng các file trong
+`drizzle/` nên chạy trên schema/index y hệt production. `test/helpers/app.ts` gọi
+`createApp(testDbMw)` (mục 2) để test tích hợp đi qua route/middleware/rbac thật qua
+`app.request()` của Hono, chỉ tráo tầng kết nối DB. Chi tiết cấu trúc, cách viết test mới:
+[`test/README.md`](../test/README.md) (kỹ thuật) / [`docs/kiem-tra-app.md`](kiem-tra-app.md)
+(không cần biết code).

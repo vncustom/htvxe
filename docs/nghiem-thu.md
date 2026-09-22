@@ -3,9 +3,15 @@
 Chạy thử trên **URL Cloudflare** (`https://htvxe.<tài-khoản>.workers.dev`).
 Mật khẩu mọi tài khoản: `123456`. Đánh dấu ✅ khi đạt.
 
+> Trước khi nghiệm thu bằng tay, chạy `npm test` (xem
+> [`docs/kiem-tra-app.md`](kiem-tra-app.md)) — bộ test tự động đã phủ phần lớn logic
+> vòng đời đơn + phân quyền ở mục 1-2 dưới đây trong vài giây, giúp bắt lỗi sớm trước
+> khi tốn thời gian bấm tay.
+
 ## 0. Chuẩn bị
 
-- [ ] Supabase SQL Editor đã chạy `drizzle/0000_init.sql` + `scripts/seed.sql` → có 367 user + 4 xe
+- [ ] Supabase SQL Editor đã chạy **toàn bộ** file `.sql` trong `drizzle/` (theo thứ tự
+      số, không chỉ `0000_init.sql`) + `scripts/seed.sql` → có 367 user + 4 xe
 - [ ] *(tuỳ chọn)* chạy `scripts/demo.sql` để có sẵn 22 đơn phủ mọi trạng thái
 - [ ] `git push` → Worker `htvxe` deploy xong, mở URL thấy trang đăng nhập (có **logo Đài**)
 - [ ] Secret `DATABASE_URL` (pooler 6543) + `AUTH_SECRET` đã đặt ở Worker

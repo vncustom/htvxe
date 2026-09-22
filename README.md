@@ -17,6 +17,9 @@ Tài liệu chi tiết trong [`docs/`](docs/):
 | [`docs/du-lieu-mau.md`](docs/du-lieu-mau.md) | Nạp/dọn dữ liệu mẫu để test, checklist trước khi go-live — **dành cho người không biết code** |
 | [`docs/dong-bo.md`](docs/dong-bo.md) | Vì sao **không còn** tầng đồng bộ |
 | [`docs/app-android.md`](docs/app-android.md) | App Android (TWA bọc web) — build APK, xác minh domain, phát hành |
+| [`docs/cap-nhat-user-tu-file-admin.md`](docs/cap-nhat-user-tu-file-admin.md) | Nạp danh sách user hàng loạt từ file Excel do Admin/nhân sự cấp |
+| [`docs/huong-dan-tich-hop-htv-sso.md`](docs/huong-dan-tich-hop-htv-sso.md) | Cơ chế + mã nguồn mẫu tích hợp đăng nhập HTV SSO |
+| [`docs/huong-dan-lay-gmail-refresh-token.md`](docs/huong-dan-lay-gmail-refresh-token.md) | Cấu hình Gmail API để app gửi email thông báo |
 
 ## Stack
 
@@ -35,7 +38,7 @@ Tài liệu chi tiết trong [`docs/`](docs/):
 src/
   index.tsx        wire toàn bộ + middleware DB / session
   env.ts           kiểu Bindings / Session
-  db/schema.ts     lược đồ Drizzle — NGUỒN SỰ THẬT, 9 bảng
+  db/schema.ts     lược đồ Drizzle — NGUỒN SỰ THẬT, 11 bảng
   db/client.ts     kết nối postgres.js cho mỗi request (prepare:false cho pooler 6543)
   lib/             password, session, page, rbac, status, tz, odometer, queries, ui, notify, push, vehicleGroups
   routes/
@@ -60,8 +63,10 @@ drizzle/           SQL khởi tạo do drizzle-kit sinh (0000_init.sql, ...)
 
 ## Dựng nhanh (không cần máy local)
 
-1. **Supabase** → tạo project → **SQL Editor**: chạy `drizzle/0000_init.sql` (tạo 9 bảng)
-   rồi `scripts/seed.sql` (nạp user + xe).
+1. **Supabase** → tạo project → **SQL Editor**: chạy lần lượt **tất cả** file `.sql`
+   trong `drizzle/` theo đúng thứ tự số (`0000_init.sql`, `0001_...`, `0002_...`, ...
+   — chỉ chạy `0000_init.sql` là **chưa đủ**, xem chi tiết ở
+   [`docs/trien-khai.md`](docs/trien-khai.md)), rồi `scripts/seed.sql` (nạp user + xe).
 2. **GitHub** → push repo này.
 3. **Cloudflare** → Workers & Pages → *Import a repository* → chọn repo, nhánh `main`,
    Deploy command `npx wrangler deploy`.
