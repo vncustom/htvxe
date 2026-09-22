@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, isNull, like, ne, sql, type SQL } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import type { DB } from "../db/client";
 import {
   bookingApprovals,
@@ -32,61 +33,39 @@ export async function genBookingCode(db: DB, now = new Date()): Promise<string> 
 
 export type FullBooking = Awaited<ReturnType<typeof loadBooking>>;
 
+const requesterU = alias(users, "requester_u");
+const approverU = alias(users, "approver_u");
+const driverU = alias(users, "driver_u");
+const dispatcherU = alias(users, "dispatcher_u");
+
+/** 1 round-trip duy nhất (LEFT JOIN hết) thay vì dò tuần tự từng bảng liên quan. */
 export async function loadBooking(db: DB, id: string) {
-  const [bk] = await db.select().from(bookings).where(eq(bookings.id, id)).limit(1);
-  if (!bk || bk.deletedAt) return null;
-
-  const [requester] = await db
-    .select({ fullName: users.fullName, username: users.username, phone: users.phone, dsBan: users.dsBan })
-    .from(users)
-    .where(eq(users.username, bk.requesterUsername))
+  const [row] = await db
+    .select({
+      bk: bookings,
+      requester: { fullName: requesterU.fullName, username: requesterU.username, phone: requesterU.phone, dsBan: requesterU.dsBan },
+      approval: bookingApprovals,
+      approverName: approverU.fullName,
+      dispatch: bookingDispatch,
+      vehicle: vehicles,
+      driver: { fullName: driverU.fullName, username: driverU.username, phone: driverU.phone },
+      dispatcherName: dispatcherU.fullName,
+      tripLog: tripLogs,
+    })
+    .from(bookings)
+    .leftJoin(requesterU, eq(requesterU.username, bookings.requesterUsername))
+    .leftJoin(bookingApprovals, and(eq(bookingApprovals.bookingId, bookings.id), isNull(bookingApprovals.deletedAt)))
+    .leftJoin(approverU, eq(approverU.username, bookingApprovals.approverUsername))
+    .leftJoin(bookingDispatch, and(eq(bookingDispatch.bookingId, bookings.id), isNull(bookingDispatch.deletedAt)))
+    .leftJoin(vehicles, eq(vehicles.id, bookingDispatch.vehicleId))
+    .leftJoin(driverU, eq(driverU.username, bookingDispatch.driverUsername))
+    .leftJoin(dispatcherU, eq(dispatcherU.username, bookingDispatch.dispatchedBy))
+    .leftJoin(tripLogs, and(eq(tripLogs.bookingId, bookings.id), isNull(tripLogs.deletedAt)))
+    .where(eq(bookings.id, id))
     .limit(1);
+  if (!row || row.bk.deletedAt) return null;
 
-  const [approval] = await db
-    .select()
-    .from(bookingApprovals)
-    .where(and(eq(bookingApprovals.bookingId, id), isNull(bookingApprovals.deletedAt)))
-    .limit(1);
-  let approverName: string | null = null;
-  if (approval) {
-    const [a] = await db
-      .select({ fullName: users.fullName })
-      .from(users)
-      .where(eq(users.username, approval.approverUsername))
-      .limit(1);
-    approverName = a?.fullName ?? null;
-  }
-
-  const [dispatch] = await db
-    .select()
-    .from(bookingDispatch)
-    .where(and(eq(bookingDispatch.bookingId, id), isNull(bookingDispatch.deletedAt)))
-    .limit(1);
-  let vehicle = null as typeof vehicles.$inferSelect | null;
-  let driver: { fullName: string; username: string; phone: string | null } | null = null;
-  let dispatcherName: string | null = null;
-  if (dispatch) {
-    [vehicle] = await db.select().from(vehicles).where(eq(vehicles.id, dispatch.vehicleId)).limit(1);
-    [driver] = await db
-      .select({ fullName: users.fullName, username: users.username, phone: users.phone })
-      .from(users)
-      .where(eq(users.username, dispatch.driverUsername))
-      .limit(1);
-    const [d] = await db
-      .select({ fullName: users.fullName })
-      .from(users)
-      .where(eq(users.username, dispatch.dispatchedBy))
-      .limit(1);
-    dispatcherName = d?.fullName ?? null;
-  }
-
-  const [tripLog] = await db
-    .select()
-    .from(tripLogs)
-    .where(and(eq(tripLogs.bookingId, id), isNull(tripLogs.deletedAt)))
-    .limit(1);
-
-  return { bk, requester, approval, approverName, dispatch, vehicle, driver, dispatcherName, tripLog };
+  return row;
 }
 
 export type Badges = {
