@@ -30,46 +30,60 @@
     setButtonState(btn, Notification.permission === "denied" ? "denied" : existing ? "on" : "off");
 
     btn.addEventListener("click", async () => {
-      if (btn.dataset.state === "on") {
-        const sub = await reg.pushManager.getSubscription();
-        if (sub) {
-          await fetch("/api/push/unsubscribe", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ endpoint: sub.endpoint }),
-          });
-          await sub.unsubscribe();
+      try {
+        if (btn.dataset.state === "on") {
+          const sub = await reg.pushManager.getSubscription();
+          if (sub) {
+            await fetch("/api/push/unsubscribe", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ endpoint: sub.endpoint }),
+            });
+            await sub.unsubscribe();
+          }
+          setButtonState(btn, "off");
+          return;
         }
-        setButtonState(btn, "off");
-        return;
-      }
 
-      const perm = await Notification.requestPermission();
-      if (perm !== "granted") {
-        setButtonState(btn, perm === "denied" ? "denied" : "off");
-        return;
+        const perm = await Notification.requestPermission();
+        if (perm !== "granted") {
+          setButtonState(btn, perm === "denied" ? "denied" : "off");
+          return;
+        }
+        const vapidRes = await fetch("/api/push/vapid-public-key");
+        if (!vapidRes.ok) {
+          alert(
+            "Không lấy được khoá thông báo đẩy từ máy chủ (mã lỗi " +
+              vapidRes.status +
+              "). Có thể phiên đăng nhập đã hết hạn — thử tải lại trang và đăng nhập lại.",
+          );
+          return;
+        }
+        const { publicKey } = await vapidRes.json();
+        if (!publicKey) {
+          alert("Máy chủ chưa cấu hình thông báo đẩy.");
+          return;
+        }
+        const sub = await reg.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: urlBase64ToUint8Array(publicKey),
+        });
+        const res = await fetch("/api/push/subscribe", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(sub.toJSON()),
+        });
+        if (!res.ok) {
+          await sub.unsubscribe();
+          alert("Không lưu được đăng ký thông báo trên máy chủ. Thử lại sau.");
+          setButtonState(btn, "off");
+          return;
+        }
+        setButtonState(btn, "on");
+      } catch (err) {
+        console.error("Lỗi bật thông báo:", err);
+        alert("Không bật được thông báo: " + (err && err.message ? err.message : err));
       }
-      const { publicKey } = await fetch("/api/push/vapid-public-key").then((r) => r.json());
-      if (!publicKey) {
-        alert("Máy chủ chưa cấu hình thông báo đẩy.");
-        return;
-      }
-      const sub = await reg.pushManager.subscribe({
-        userVisibleOnly: true,
-        applicationServerKey: urlBase64ToUint8Array(publicKey),
-      });
-      const res = await fetch("/api/push/subscribe", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(sub.toJSON()),
-      });
-      if (!res.ok) {
-        await sub.unsubscribe();
-        alert("Không lưu được đăng ký thông báo trên máy chủ. Thử lại sau.");
-        setButtonState(btn, "off");
-        return;
-      }
-      setButtonState(btn, "on");
     });
   }
 
