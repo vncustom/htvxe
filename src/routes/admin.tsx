@@ -3,6 +3,7 @@ import { eq } from "drizzle-orm";
 import type { Env } from "../env";
 import { users, vehicles } from "../db/schema";
 import { pageCtx } from "../lib/page";
+import { must } from "../lib/session";
 import { isAdmin, ROLE_LABEL } from "../lib/rbac";
 import { hashPassword } from "../lib/password";
 import { Layout, Alert } from "../lib/ui";
@@ -113,7 +114,7 @@ admin.get("/quan-tri/user/moi", async (c) => {
 });
 
 admin.post("/quan-tri/user/moi", async (c) => {
-  const s = (await pageCtx(c)).s;
+  const s = must(c);
   if (!isAdmin(s)) return c.text("Chỉ quản trị.", 403);
   const db = c.get("db");
   const f = await c.req.formData();
@@ -155,7 +156,7 @@ admin.get("/quan-tri/user/:username", async (c) => {
 });
 
 admin.post("/quan-tri/user/:username", async (c) => {
-  const s = (await pageCtx(c)).s;
+  const s = must(c);
   if (!isAdmin(s)) return c.text("Chỉ quản trị.", 403);
   const db = c.get("db");
   const username = c.req.param("username");
@@ -181,7 +182,7 @@ admin.post("/quan-tri/user/:username", async (c) => {
 });
 
 admin.post("/quan-tri/user/:username/reset-mk", async (c) => {
-  const s = (await pageCtx(c)).s;
+  const s = must(c);
   if (!isAdmin(s)) return c.text("Chỉ quản trị.", 403);
   const db = c.get("db");
   const username = c.req.param("username");
@@ -245,7 +246,7 @@ admin.get("/quan-tri/xe/moi", async (c) => {
 });
 
 admin.post("/quan-tri/xe/moi", async (c) => {
-  const s = (await pageCtx(c)).s;
+  const s = must(c);
   if (!isAdmin(s)) return c.text("Chỉ quản trị.", 403);
   const db = c.get("db");
   const f = await c.req.formData();
@@ -274,7 +275,7 @@ admin.get("/quan-tri/xe/:id", async (c) => {
 });
 
 admin.post("/quan-tri/xe/:id", async (c) => {
-  const s = (await pageCtx(c)).s;
+  const s = must(c);
   if (!isAdmin(s)) return c.text("Chỉ quản trị.", 403);
   const db = c.get("db");
   const id = c.req.param("id");

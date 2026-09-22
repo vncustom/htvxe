@@ -3,7 +3,6 @@ import { eq } from "drizzle-orm";
 import type { Env } from "../env";
 import { users } from "../db/schema";
 import { verifyPassword } from "../lib/password";
-import { CSS } from "../lib/ui";
 import { issueSession, clearSession } from "../lib/session";
 import {
   verifySsoJwt,
@@ -32,7 +31,7 @@ const LoginPage = (props: LoginPageProps) => {
         <meta charset="utf-8" />
         <meta name="viewport" content="width=device-width, initial-scale=1" />
         <title>Đăng nhập — Đặt xe HTV</title>
-        <style dangerouslySetInnerHTML={{ __html: CSS }} />
+        <link rel="stylesheet" href="/style.css" />
         <style
           dangerouslySetInnerHTML={{
             __html: `

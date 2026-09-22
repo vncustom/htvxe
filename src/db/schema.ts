@@ -83,6 +83,7 @@ export const bookings = pgTable(
     index("bookings_status_idx").on(t.status),
     index("bookings_start_time_idx").on(t.startTime),
     index("bookings_don_vi_idx").on(t.donViYeuCau),
+    index("bookings_requester_idx").on(t.requesterUsername),
   ],
 );
 
