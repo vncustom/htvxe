@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "vn.org.htv.datxe",
+      "sha256_cert_fingerprints": [
+        "CC:7E:8F:6A:6F:19:8A:31:C1:BE:D3:F6:72:C5:A9:50:19:16:3D:DB:6B:EB:72:9B:6C:24:BF:F2:1A:F2:90:8B"
+      ]
+    }
+  }
+]
