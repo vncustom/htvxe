@@ -14,6 +14,7 @@ Tài liệu chi tiết trong [`docs/`](docs/):
 | [`docs/system_architecture.md`](docs/system_architecture.md) | Kiến trúc kỹ thuật: vòng đời request, bản đồ module, sơ đồ dữ liệu, ghi chú hiệu năng |
 | [`docs/nghiem-thu.md`](docs/nghiem-thu.md) | Danh sách nghiệm thu (checklist) |
 | [`docs/kiem-tra-app.md`](docs/kiem-tra-app.md) | Cách kiểm tra app còn chạy đúng không — **dành cho người không biết code** |
+| [`docs/du-lieu-mau.md`](docs/du-lieu-mau.md) | Nạp/dọn dữ liệu mẫu để test, checklist trước khi go-live — **dành cho người không biết code** |
 | [`docs/dong-bo.md`](docs/dong-bo.md) | Vì sao **không còn** tầng đồng bộ |
 | [`docs/app-android.md`](docs/app-android.md) | App Android (TWA bọc web) — build APK, xác minh domain, phát hành |
 

@@ -87,6 +87,9 @@ Khuyến nghị: **cứ tắt hoạt động, đừng xoá.**
 
 ## 3. Dữ liệu demo để trình diễn
 
+> Bản hướng dẫn từng bước, dễ hiểu hơn cho người không quen SQL:
+> [`docs/du-lieu-mau.md`](du-lieu-mau.md).
+
 - **Nạp**: Supabase SQL Editor → dán [`scripts/demo.sql`](../scripts/demo.sql) → Run.
   Tạo 22 đơn phủ **mọi trạng thái + màu**, có đơn phát sinh, cảnh báo km, audit log,
   chuyến đang chạy / quá giờ. Mốc thời gian tính theo `now()` nên luôn "tươi". Chạy lại
