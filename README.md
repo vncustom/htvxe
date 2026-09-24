@@ -17,6 +17,7 @@ Tài liệu chi tiết trong [`docs/`](docs/):
 | [`docs/du-lieu-mau.md`](docs/du-lieu-mau.md) | Nạp/dọn dữ liệu mẫu để test, checklist trước khi go-live — **dành cho người không biết code** |
 | [`docs/dong-bo.md`](docs/dong-bo.md) | Vì sao **không còn** tầng đồng bộ |
 | [`docs/app-android.md`](docs/app-android.md) | App Android (TWA bọc web) — build APK, xác minh domain, phát hành |
+| [`docs/cai-app-iphone.md`](docs/cai-app-iphone.md) | Hướng dẫn người dùng iPhone cài PWA và bật thông báo |
 | [`docs/cap-nhat-user-tu-file-admin.md`](docs/cap-nhat-user-tu-file-admin.md) | Nạp danh sách user hàng loạt từ file Excel do Admin/nhân sự cấp |
 | [`docs/huong-dan-tich-hop-htv-sso.md`](docs/huong-dan-tich-hop-htv-sso.md) | Cơ chế + mã nguồn mẫu tích hợp đăng nhập HTV SSO |
 | [`docs/huong-dan-lay-gmail-refresh-token.md`](docs/huong-dan-lay-gmail-refresh-token.md) | Cấu hình Gmail API để app gửi email thông báo |
